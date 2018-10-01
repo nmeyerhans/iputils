@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-# Uncomment this to turn on verbose mode. 
+# Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
 export CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
@@ -62,7 +62,7 @@ binary-indep: build install
 	dh_installdocs
 	dh_installexamples
 	dh_installmenu
-	dh_installchangelogs 
+	dh_installchangelogs
 	dh_link
 	dh_compress
 	dh_fixperms
@@ -88,7 +88,7 @@ binary-arch: build install
 		debian/iputils-tracepath/usr/share/man/man8/traceroute6.iputils.8
 	dh_installman -piputils-arping
 	dh_installman -piputils-clockdiff
-	dh_installchangelogs 
+	dh_installchangelogs
 	dh_strip
 	dh_link
 	dh_compress

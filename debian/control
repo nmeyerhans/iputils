@@ -19,7 +19,7 @@ Description: Tools to test the reachability of network hosts
  .
  This package includes a ping6 utility which supports IPv6 network
  connections.
- 
+
 Package: iputils-tracepath
 Architecture: any
 Suggests: traceroute

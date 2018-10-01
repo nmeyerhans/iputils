@@ -1,6 +1,7 @@
 iputils (3:20180629-3) UNRELEASED; urgency=medium
 
   * d/changelog: Remove trailing whitespaces
+  * d/control: Remove trailing whitespaces
 
  -- Ondřej Nový <onovy@debian.org>  Mon, 01 Oct 2018 09:49:04 +0200
 

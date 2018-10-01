@@ -1,3 +1,9 @@
+iputils (3:20180629-3) UNRELEASED; urgency=medium
+
+  * d/changelog: Remove trailing whitespaces
+
+ -- Ondřej Nový <onovy@debian.org>  Mon, 01 Oct 2018 09:49:04 +0200
+
 iputils (3:20180629-2) unstable; urgency=medium
 
   * Upstream no longer maintains the RELNOTES or README files in a useful
@@ -51,7 +57,7 @@ iputils (3:20150815-1) unstable; urgency=medium
 
 iputils (3:20121221-6) UNRELEASED; urgency=medium
 
-  * Remove setuid bits on binaries if setcap succeeds during 
+  * Remove setuid bits on binaries if setcap succeeds during
     reconfigure. (Closes: 778500)
 
  -- Noah Meyerhans <noahm@debian.org>  Wed, 18 Mar 2015 20:29:32 -0700
@@ -91,9 +97,9 @@ iputils (3:20121221-3) unstable; urgency=low
 iputils (3:20121221-2) unstable; urgency=low
 
   * Silence erroneous "kernel is not very fresh" warnings. (Closes: 709052)
-  * Cherry pick revision 608419a7 from upstream for traceroute 
+  * Cherry pick revision 608419a7 from upstream for traceroute
     max-hops options
-  * Cherry pick revision cec404067 from upstream for tracepath, tracepath6 
+  * Cherry pick revision cec404067 from upstream for tracepath, tracepath6
     minor bugfixes
   * Enable the CAP_NET_RAW capability and strip the setuid bit on ping and
     ping6 binaries if possible.
@@ -125,7 +131,7 @@ iputils (3:20101006-2) unstable; urgency=low
   * Fix RFC 4620 node info queries in ping6 (Closes: 683324)
   * Fix regression in ping* causing audible notifications to always
     be enabled when flood pinging (Closes: 601147)
-  * Flush stdout when processing truncated ping* replies 
+  * Flush stdout when processing truncated ping* replies
     (Closes: 628893)
   * Use dpkg-buildflags to set build flags.
   * Add build-arch and build-indep rules in debian/rules
@@ -207,9 +213,9 @@ iputils (3:20070202-1) unstable; urgency=low
   * Fix documentation for tracepath (Closes: Bug#185156)
   * Use alternatives to manage traceroute6 so we can be installed
     alongside ndisc6. Thanks to Rémi Denis-Courmont for the
-    patch. (Closes: Bug#380677)    
+    patch. (Closes: Bug#380677)
   * Bump standards version to 3.7.2.2 (no changes needed)
-  
+
  -- Noah Meyerhans <noahm@debian.org>  Thu, 12 Apr 2007 18:45:01 -0400
 
 iputils (3:20020927-6) unstable; urgency=medium
@@ -293,7 +299,7 @@ iputils (3:20020927-1) unstable; urgency=medium
   * Added RELNOTES to /usr/share/doc/iputils-* as the upstream changelog.
   * Bumped standards version to 3.5.7.0
   * Changed the sparc kludge (see prev. version's changes) to avoid
-    using the SO_TIMESTAMP sockopt, since that seems to be where the 
+    using the SO_TIMESTAMP sockopt, since that seems to be where the
     problem is.  -U is no longer forced.
   * Fixed '==' typo on line 444 of traceroute6.c.  The patch has been
     sent upstream and will be in future releases.
@@ -316,7 +322,7 @@ iputils (3:20020124-3) unstable; urgency=medium
 
 iputils (3:20020124-2) unstable; urgency=low
 
-  * Added newlines to network error indicators in ping6 
+  * Added newlines to network error indicators in ping6
     (Closes: Bug#140254, Bug#119651)
 
  -- Noah Meyerhans <noahm@debian.org>  Wed, 17 Apr 2002 00:32:03 -0400
@@ -345,7 +351,7 @@ iputils (20001110-7) unstable; urgency=low
 iputils (20001110-6) unstable; urgency=low
 
   * Split arping out into its own separate package (iputils-arping)
-  * Made iputils-arping conflict with arping, another package which 
+  * Made iputils-arping conflict with arping, another package which
     provided the arping binary (Closes: Bug#99295)
   * Bumped the package standards version up to 3.5.4.0
 
@@ -379,7 +385,7 @@ iputils (20001110-3) unstable; urgency=low
 iputils (20001110-2) unstable; urgency=low
 
   * ping6.c: Add #defines for those stupid clear_bit, test_bit, set_bit
-    functions. 
+    functions.
 
  -- Anthony Towns <aj@azure.humbug.org.au>  Mon, 29 Jan 2001 23:39:31 +1000
 
@@ -406,7 +412,7 @@ iputils (990107-3) unstable; urgency=low
 iputils (990107-2) unstable; urgency=low
 
   * Drop priority to extra (it conflicts: with a standard package so
-    shouldn't be optional anway), and add a note to the description. 
+    shouldn't be optional anway), and add a note to the description.
 
  -- Anthony Towns <ajt@debian.org>  Sat, 12 Aug 2000 23:49:58 +1000
 

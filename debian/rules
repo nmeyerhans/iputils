@@ -23,6 +23,7 @@ override_dh_auto_configure:
 		-DBUILD_TFTPD=false \
 		-DBUILD_NINFOD=false \
 		-DBUILD_HTML_MANS=false \
+		-DBUILD_TRACEROUTE6=true \
 		-DUSE_CRYPTO=gcrypt
 
 override_dh_auto_test:

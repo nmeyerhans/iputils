@@ -1,9 +1,10 @@
 iputils (3:20190515-1) sid; urgency=medium
 
-  * New upstream snapshot
+  * New upstream snapshot (Closes: #907327, #869202)
   * Refresh and modernize debian/rules using dh
+  * Set Multi-Arch: foreign on all binary packages (Closes: #878100)
 
- -- Noah Meyerhans <noahm@debian.org>  Mon, 13 May 2019 23:27:45 -0700
+ --
 
 iputils (3:20180629-2) unstable; urgency=medium
 

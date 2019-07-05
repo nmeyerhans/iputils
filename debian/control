@@ -13,8 +13,7 @@ Package: iputils-ping
 Architecture: any
 Provides: ping
 Priority: important
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: libcap2-bin
+Depends: libcap2-bin, ${shlibs:Depends}, ${misc:Depends}
 Multi-Arch: foreign
 Description: Tools to test the reachability of network hosts
  The ping command sends ICMP ECHO_REQUEST packets to a host in order to
@@ -34,8 +33,7 @@ Description: Tools to trace the network path to a remote host
 
 Package: iputils-arping
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: libcap2-bin
+Depends: libcap2-bin, ${shlibs:Depends}, ${misc:Depends}
 Conflicts: arping
 Multi-Arch: foreign
 Description: Tool to send ICMP echo requests to an ARP address

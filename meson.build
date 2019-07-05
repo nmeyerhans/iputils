@@ -3,7 +3,7 @@ project('iputils', 'c',
 		'c_std=c99',
 		'warning_level=3',
 	],
-	version : 's20190324') # keep in sync with: git describe | awk -F- '{print $1}'
+	version : 's20190515') # keep in sync with: git describe | awk -F- '{print $1}'
 
 cc = meson.get_compiler('c')
 
@@ -219,7 +219,9 @@ config_h = configure_file(
 	configuration : conf)
 
 setcap = find_program('setcap', '/usr/sbin/setcap', '/sbin/setcap', required : false)
-if cap_dep.found() and setcap.found()
+if get_option('NO_SETCAP_OR_SUID')
+	perm_type = 'none'
+elif cap_dep.found() and setcap.found()
 	perm_type = 'caps'
 else
 	perm_type = 'setuid'
@@ -280,7 +282,7 @@ endif
 
 if build_rinfod == true
 	executable('rdisc', ['rdisc.c', git_version_h],
-		install_dir: 'sbin',
+		install_dir: get_option('sbindir'),
 		link_with : [libcommon],
 		install: true)
 	if systemd.found()
@@ -288,7 +290,7 @@ if build_rinfod == true
 		subs.set('sbindir', join_paths(get_option('prefix'), get_option('sbindir')))
 		unit_file = configure_file(
 			input: 'systemd/rdisc.service.in',
-			output: 'rdisc@.service',
+			output: 'rdisc.service',
 			configuration: subs
 		)
 		install_data(unit_file, install_dir: systemdunitdir)
@@ -316,7 +318,7 @@ endif
 
 if build_rarpd == true
 	executable('rarpd', ['rarpd.c', git_version_h],
-		install_dir: 'sbin',
+		install_dir: get_option('sbindir'),
 		link_with : [libcommon],
 		install: true)
 	if systemd.found()

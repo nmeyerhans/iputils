@@ -6,7 +6,15 @@ exec_path="$1/$2"
 perm_type="$3"
 setcap="$4"
 
+if [ -n "${DESTDIR}" ]; then
+	exec_path="${DESTDIR%/}/${exec_path}"
+fi
+
 case "$perm_type" in
+	'none')
+		# Gentoo needs build system to back off.
+		# https://github.com/iputils/iputils/issues/175
+		;;
 	'caps')
 		echo "$0: calling: $setcap cap_net_raw+ep $exec_path"
 		"$setcap" 'cap_net_raw+ep' "$exec_path" || true

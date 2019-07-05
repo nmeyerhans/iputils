@@ -6,7 +6,7 @@ iputils (3:20190515-1) sid; urgency=medium
   * Raise libcap2-bin from Recommends to Depends (Closes: #780721)
   * Update to standards version 4.3.0
 
- --
+ -- Noah Meyerhans <noahm@debian.org>  Fri, 05 Jul 2019 15:49:21 -0700
 
 iputils (3:20180629-2) unstable; urgency=medium
 

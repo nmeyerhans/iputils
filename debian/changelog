@@ -1,6 +1,6 @@
 iputils (3:20190515-1) sid; urgency=medium
 
-  * New upstream snapshot (Closes: #907327, #869202)
+  * New upstream snapshot (Closes: #907327, #869202, #869202)
   * Refresh and modernize debian/rules using dh (Closes: #648033, #928334)
   * Set Multi-Arch: foreign on all binary packages (Closes: #878100)
   * Raise libcap2-bin from Recommends to Depends (Closes: #780721)

@@ -3,7 +3,7 @@ iputils (3:20190515-2) unstable; urgency=medium
   * Import upstream fix for FTBFS issue when setcap is not
     installed. (Closes: #931491)
 
- --
+ -- Noah Meyerhans <noahm@debian.org>  Sun, 07 Jul 2019 11:21:17 -0700
 
 iputils (3:20190515-1) sid; urgency=medium
 

@@ -3,7 +3,8 @@ project('iputils', 'c',
 		'c_std=c99',
 		'warning_level=3',
 	],
-	version : 's20190515') # keep in sync with: git describe | awk -F- '{print $1}'
+	meson_version : '>=0.39',
+	version : 's20190709') # keep in sync with: git describe | awk -F- '{print $1}'
 
 cc = meson.get_compiler('c')
 
@@ -76,6 +77,8 @@ if opt != ''
 	conf.set_quoted('DEFAULT_DEVICE', opt, description : 'arping default device.')
 endif
 
+# Some systems needs intl for gettext
+intl_dep = []
 opt = get_option('USE_GETTEXT')
 if opt == true
 	prefix = get_option('prefix')
@@ -85,6 +88,7 @@ if opt == true
 	conf.set('ENABLE_NLS', 1, description : 'If set enable I18N.')
 	conf.set_quoted('LOCALEDIR', join_paths(prefix, localedir))
 	subdir ('po')
+	intl_dep += cc.find_library('intl', required : false)
 endif
 
 opt = get_option('USE_IDN')
@@ -100,20 +104,22 @@ else
 endif
 
 crypto = get_option('USE_CRYPTO')
+crypto_dep = []
 if crypto == 'nettle'
-	crypto_dep = dependency('nettle')
+	crypto_dep += dependency('nettle')
 	conf.set('USE_NETTLE', 1, description : 'If set use nettle crypto library.')
 elif crypto == 'gcrypt'
-	crypto_dep = cc.find_library('gcrypt')
+	crypto_dep += cc.find_library('gcrypt')
+	crypto_dep += dependency('gpg-error', required : true)
 	conf.set('USE_GCRYPT', 1, description : 'If set use gcrypt crypto library.')
 elif crypto == 'openssl'
-	crypto_dep = dependency('openssl')
+	crypto_dep += dependency('openssl')
 	conf.set('USE_OPENSSL', 1, description : 'if set use openssl crypto library.')
 elif crypto == 'kernel'
-	crypto_dep = dependency('disabler-appears-to-disable-executable-build', required : false)
+	crypto_dep += dependency('disabler-appears-to-disable-executable-build', required : false)
 	conf.set('USE_KERNEL_CRYPTO_API', 1, description : 'if set use Linux kernel Crypto API.')
 elif crypto == 'none'
-	crypto_dep = dependency('disabler-appears-to-disable-executable-build', required : false)
+	crypto_dep += dependency('disabler-appears-to-disable-executable-build', required : false)
 	conf.set('PING6_NONCE_MEMORY', 1,
 		description : 'If set RFC6744 random does not use any CRYPTO lib.')
 endif
@@ -211,7 +217,8 @@ endforeach
 
 git_version_h = vcs_tag(
 	input : 'git-version.h.meson',
-	output : 'git-version.h'
+	output : 'git-version.h',
+	fallback : meson.project_version()
 )
 
 config_h = configure_file(
@@ -221,10 +228,13 @@ config_h = configure_file(
 setcap = find_program('setcap', '/usr/sbin/setcap', '/sbin/setcap', required : false)
 if get_option('NO_SETCAP_OR_SUID')
 	perm_type = 'none'
+	setcap_path = '/dev/null'
 elif cap_dep.found() and setcap.found()
 	perm_type = 'caps'
+	setcap_path = setcap.path()
 else
 	perm_type = 'setuid'
+	setcap_path = '/dev/null'
 endif
 
 ############################################################
@@ -236,47 +246,47 @@ libcommon = static_library(
 
 if build_ping == true
 	executable('ping', ['ping.c', 'ping_common.c', 'ping6_common.c', git_version_h],
-		dependencies : [m_dep, cap_dep, idn_dep, crypto_dep, resolv_dep],
+		dependencies : [m_dep, cap_dep, idn_dep, intl_dep, crypto_dep, resolv_dep],
 		link_with : [libcommon],
 		install: true)
 	meson.add_install_script('build-aux/setcap-setuid.sh',
 		join_paths(get_option('prefix'), get_option('bindir')),
 		'ping',
 		perm_type,
-		setcap.path()
+		setcap_path
 	)
 endif
 
 if build_tracepath == true
 	executable('tracepath', ['tracepath.c', git_version_h],
-		dependencies : idn_dep,
+		dependencies : [idn_dep, intl_dep],
 		link_with : [libcommon],
 		install: true)
 endif
 
 if build_traceroute6 == true
 	executable('traceroute6', ['traceroute6.c', git_version_h],
-		dependencies : [cap_dep, idn_dep],
+		dependencies : [cap_dep, intl_dep, idn_dep],
 		link_with : [libcommon],
 		install: true)
 	meson.add_install_script('build-aux/setcap-setuid.sh',
 		join_paths(get_option('prefix'), get_option('bindir')),
 		'traceroute6',
 		perm_type,
-		setcap.path()
+		setcap_path
 	)
 endif
 
 if build_clockdiff == true
 	executable('clockdiff', ['clockdiff.c', git_version_h],
-		dependencies : [cap_dep],
+		dependencies : [cap_dep, intl_dep],
 		link_with : [libcommon],
 		install: true)
 	meson.add_install_script('build-aux/setcap-setuid.sh',
 		join_paths(get_option('prefix'), get_option('bindir')),
 		'clockdiff',
 		perm_type,
-		setcap.path()
+		setcap_path
 	)
 endif
 
@@ -299,14 +309,14 @@ endif
 
 if build_arping == true
 	executable('arping', ['arping.c', git_version_h],
-		dependencies : [rt_dep, cap_dep, idn_dep],
+		dependencies : [rt_dep, cap_dep, idn_dep, intl_dep],
 		link_with : [libcommon],
 		install: true)
 	meson.add_install_script('build-aux/setcap-setuid.sh',
 		join_paths(get_option('prefix'), get_option('bindir')),
 		'arping',
 		perm_type,
-		setcap.path()
+		setcap_path
 	)
 endif
 

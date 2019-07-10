@@ -37,15 +37,6 @@
 
 #include "iputils_common.h"
 
-#ifdef USE_IDN
-# ifndef AI_IDN
-#  define AI_IDN		0x0040
-# endif
-# ifndef AI_CANONIDN
-#  define AI_CANONIDN		0x0080
-# endif
-#endif
-
 #ifdef DEFAULT_DEVICE
 # define DEFAULT_DEVICE_STR	DEFAULT_DEVICE
 #else
@@ -801,7 +792,7 @@ static int event_loop(struct run_state *ctl)
 	close(tfd);
 	freeifaddrs(ctl->ifa0);
 	rc |= finish(ctl);
-	rc |= !(ctl->brd_sent != ctl->received);
+	rc |= (ctl->sent != ctl->received);
 	return rc;
 }
 

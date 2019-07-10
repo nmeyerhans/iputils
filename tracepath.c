@@ -35,26 +35,9 @@
 #include "iputils_common.h"
 
 #ifdef USE_IDN
-# ifndef AI_IDN
-#  define AI_IDN 0x0040
-# endif
-# ifndef NI_IDN
-#  define NI_IDN 32
-# endif
 # define getnameinfo_flags	NI_IDN
 #else
 # define getnameinfo_flags	0
-#endif
-
-#ifndef SOL_IPV6
-# define SOL_IPV6 IPPROTO_IPV6
-#endif
-
-#ifndef IP_PMTUDISC_DO
-# define IP_PMTUDISC_DO		3
-#endif
-#ifndef IPV6_PMTUDISC_DO
-# define IPV6_PMTUDISC_DO	3
 #endif
 
 enum {
@@ -551,7 +534,7 @@ int main(int argc, char **argv)
 			error(1, errno, "IPV6_MTU_DISCOVER");
 		on = 1;
 		if (setsockopt(ctl.socket_fd, SOL_IPV6, IPV6_RECVERR, &on, sizeof(on)))
-			error(1, errno, "IPV6_IPV6_RECVERR");
+			error(1, errno, "IPV6_RECVERR");
 		if (setsockopt(ctl.socket_fd, SOL_IPV6, IPV6_HOPLIMIT, &on, sizeof(on))
 #ifdef IPV6_RECVHOPLIMIT
 		    && setsockopt(ctl.socket_fd, SOL_IPV6, IPV6_2292HOPLIMIT, &on, sizeof(on))

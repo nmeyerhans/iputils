@@ -1,3 +1,9 @@
+iputils (3:20190709-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Noah Meyerhans <noahm@debian.org>  Tue, 09 Jul 2019 21:06:58 -0700
+
 iputils (3:20190515-2) unstable; urgency=medium
 
   * Import upstream fix for FTBFS issue when setcap is not

@@ -2,7 +2,7 @@ Source: iputils
 Section: net
 Priority: optional
 Maintainer: Noah Meyerhans <noahm@debian.org>
-Standards-Version: 4.3.0
+Standards-Version: 4.4.0
 Build-Depends: debhelper (>= 10), xsltproc, docbook-xsl,
  docbook-xsl-ns, libcap-dev,
   libgcrypt-dev, libidn11-dev, bash (>= 3), meson

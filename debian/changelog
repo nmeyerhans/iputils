@@ -2,6 +2,8 @@ iputils (3:20190709-2) UNRELEASED; urgency=medium
 
   * Incorporate upstream fix for arping exit code regression
     (Closes: #936080)
+  * Follow local file diversions when manipulating ACLs and file modes on
+    installed binaries.
 
  -- Noah Meyerhans <noahm@debian.org>  Thu, 03 Oct 2019 14:08:39 -0700
 

@@ -1,3 +1,11 @@
+iputils (3:20190709-3) unstable; urgency=medium
+
+  * Incorporate upstream fix for getaddrinfo handling. Thanks to Benjamin
+  * Poirier <benjamin.poirier@gmail.com>
+    (Closes: #947921)
+
+ -- Noah Meyerhans <noahm@debian.org>  Thu, 30 Jan 2020 15:11:23 -0800
+
 iputils (3:20190709-2) unstable; urgency=medium
 
   * Incorporate upstream fix for arping exit code regression

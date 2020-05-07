@@ -1,3 +1,9 @@
+iputils (3:20190709-4) UNRELEASED; urgency=medium
+
+  * Fix IDN build dependency. (Closes: #959868)
+
+ -- Noah Meyerhans <noahm@debian.org>  Wed, 06 May 2020 21:25:15 -0700
+
 iputils (3:20190709-3) unstable; urgency=medium
 
   * Incorporate upstream fix for getaddrinfo handling. Thanks to Benjamin

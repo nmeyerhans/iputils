@@ -5,6 +5,7 @@ iputils (3:20200821-1) UNRELEASED; urgency=medium
   * Update standards compliance to 4.5.0 (no changes needed)
   * Switch to debhelper compat level 13
   * Install upstream's CHANGES file in binary packages
+  * Let dh_auto_configure pass a crossfile to meson (Closes: #962080)
 
  -- Noah Meyerhans <noahm@debian.org>  Wed, 06 May 2020 21:25:15 -0700
 

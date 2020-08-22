@@ -13,8 +13,7 @@ MAN_TARGETS=doc/arping.8 doc/clockdiff.8 \
 	dh $@ --buildsystem=meson+ninja --builddirectory=$(BUILD_DIR)
 
 override_dh_auto_configure:
-	meson $(BUILD_DIR) \
-		-Dprefix=/usr \
+	dh_auto_configure -- \
 		-DBUILD_RARPD=false \
 		-DBUILD_RDISC=false \
 		-DBUILD_TFTPD=false \

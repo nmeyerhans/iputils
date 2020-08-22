@@ -1,4 +1,4 @@
-iputils (3:20200821-1) UNRELEASED; urgency=medium
+iputils (3:20200821-1) unstable; urgency=medium
 
   * New upstream version (Closes: #498429, #935946)
   * Fix IDN build dependency. (Closes: #959868)
@@ -10,7 +10,7 @@ iputils (3:20200821-1) UNRELEASED; urgency=medium
     - Add repository and bug tracker details to debian/upstream/metadata
     - Add Homepage field to debian/control
 
- -- Noah Meyerhans <noahm@debian.org>  Wed, 06 May 2020 21:25:15 -0700
+ -- Noah Meyerhans <noahm@debian.org>  Sat, 22 Aug 2020 14:13:21 -0700
 
 iputils (3:20190709-3) unstable; urgency=medium
 

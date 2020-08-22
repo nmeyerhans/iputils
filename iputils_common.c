@@ -4,7 +4,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
+
+#if HAVE_GETRANDOM
+# include <sys/random.h>
+#endif
 
 #ifdef HAVE_ERROR_H
 # include <error.h>
@@ -28,13 +33,15 @@ void error(int status, int errnum, const char *format, ...)
 
 int close_stream(FILE *stream)
 {
+	const int flush_status = fflush(stream);
 #ifdef HAVE___FPENDING
 	const int some_pending = (__fpending(stream) != 0);
 #endif
 	const int prev_fail = (ferror(stream) != 0);
 	const int fclose_fail = (fclose(stream) != 0);
 
-	if (prev_fail || (fclose_fail && (
+	if (flush_status ||
+	    prev_fail || (fclose_fail && (
 #ifdef HAVE___FPENDING
 					  some_pending ||
 #endif
@@ -78,4 +85,50 @@ long strtol_or_err(char const *const str, char const *const errmesg,
  err:
 	error(EXIT_FAILURE, errno, "%s: '%s'", errmesg, str);
 	abort();
+}
+
+static unsigned int iputil_srand_fallback(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return ((getpid() << 16) ^ getuid() ^ ts.tv_sec ^ ts.tv_nsec);
+}
+
+void iputils_srand(void)
+{
+	unsigned int i;
+#if HAVE_GETRANDOM
+	ssize_t ret;
+
+	while ((ret = getrandom(&i, sizeof(i), GRND_NONBLOCK)) != sizeof(i)) {
+		switch(errno) {
+		case EINTR:
+			continue;
+		default:
+			i = iputil_srand_fallback();
+			break;
+		}
+	}
+#else
+	i = iputil_srand_fallback();
+#endif
+	srand(i);
+	/* Consume up to 31 random numbers */
+	i = rand() & 0x1F;
+	while (0 < i) {
+		rand();
+		i--;
+	}
+}
+
+void timespecsub(struct timespec *a, struct timespec *b, struct timespec *res)
+{
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+
+	if (res->tv_nsec < 0) {
+		res->tv_sec--;
+		res->tv_nsec += 1000000000L;
+	}
 }

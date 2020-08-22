@@ -222,6 +222,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <linux/types.h>
 #include <netdb.h>
 #include <net/if.h>
@@ -419,7 +420,7 @@ static void send_probe(struct run_state *ctl, uint32_t seq, int ttl)
 
 	pkt->ident = htonl(ctl->ident);
 	pkt->seq = htonl(seq);
-	clock_gettime(CLOCK_MONOTONIC_RAW, &pkt->ts);
+	clock_gettime(CLOCK_MONOTONIC, &pkt->ts);
 
 	i = setsockopt(ctl->sndsock, SOL_IPV6, IPV6_UNICAST_HOPS, &ttl, sizeof(ttl));
 	if (i < 0)
@@ -860,10 +861,10 @@ int main(int argc, char **argv)
 			struct timespec t1, t2;
 			struct in6_addr to_addr;
 
-			clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
+			clock_gettime(CLOCK_MONOTONIC, &t1);
 			send_probe(&ctl, ++seq, ttl);
 			while ((cc = wait_for_reply(&ctl, &from, &to_addr, reset_timer)) != 0) {
-				clock_gettime(CLOCK_MONOTONIC_RAW, &t2);
+				clock_gettime(CLOCK_MONOTONIC, &t2);
 				if ((i = packet_ok(&ctl, cc, &from, &to_addr, seq, &t1))) {
 					if (memcmp(&from.sin6_addr, &lastaddr,
 						   sizeof(from.sin6_addr))) {

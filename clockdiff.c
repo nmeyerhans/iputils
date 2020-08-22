@@ -55,12 +55,14 @@
 #include <errno.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <linux/types.h>
 #include <math.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,6 +100,11 @@ enum {
 	PACKET_IN = 1024
 };
 
+enum {
+	time_format_ctime,
+	time_format_iso
+};
+
 struct run_state {
 	int interactive;
 	uint16_t id;
@@ -113,12 +120,12 @@ struct run_state {
 	long min_rtt;
 	long rtt_sigma;
 	char *hisname;
+	int time_format;
 };
 
 struct measure_vars {
-	fd_set ready;
-	struct timeval tv1;
-	struct timeval tout;
+	struct timespec ts1;
+	struct timespec tout;
 	int count;
 	int cc;
 	unsigned char packet[PACKET_IN];
@@ -198,20 +205,19 @@ static int measure_inner_loop(struct run_state *ctl, struct measure_vars *mv)
 	long histime1 = 0;
 	long recvtime;
 	long sendtime;
+	struct pollfd p = { .fd = ctl->sock_raw, .events = POLLIN | POLLHUP };
 
-	FD_ZERO(&mv->ready);
-	FD_SET(ctl->sock_raw, &mv->ready);
 	{
 		long tmo = ctl->rtt + ctl->rtt_sigma;
 
 		mv->tout.tv_sec = tmo / 1000;
-		mv->tout.tv_usec = (tmo - (tmo / 1000) * 1000) * 1000;
+		mv->tout.tv_nsec = (tmo - (tmo / 1000) * 1000) * 1000000;
 	}
 
-	if ((mv->count = select(FD_SETSIZE, &mv->ready, NULL, NULL, &mv->tout)) <= 0)
+	if ((mv->count = ppoll(&p, 1, &mv->tout, NULL)) <= 0)
 		return BREAK;
 
-	gettimeofday(&mv->tv1, NULL);
+	clock_gettime(CLOCK_REALTIME, &mv->ts1);
 	mv->cc = recvfrom(ctl->sock_raw, (char *)mv->packet, PACKET_IN, 0, NULL, &mv->length);
 
 	if (mv->cc < 0)
@@ -265,8 +271,8 @@ static int measure_inner_loop(struct run_state *ctl, struct measure_vars *mv)
 				return -1;
 			}
 		} else {
-			recvtime = (mv->tv1.tv_sec % (24 * 60 * 60)) * 1000 +
-					mv->tv1.tv_usec / 1000;
+			recvtime = (mv->ts1.tv_sec % (24 * 60 * 60)) * 1000 +
+					mv->ts1.tv_nsec / 1000000;
 			sendtime = ntohl(*(uint32_t *) (mv->icp + 1));
 		}
 		diff = recvtime - sendtime;
@@ -339,6 +345,7 @@ static int measure(struct run_state *ctl)
 	};
 	unsigned char opacket[64] = { 0 };
 	struct icmphdr *oicp = (struct icmphdr *)opacket;
+	struct pollfd p = { .fd = ctl->sock_raw, .events = POLLIN | POLLHUP };
 
 	mv.ip = (struct iphdr *)mv.packet;
 	ctl->min_rtt = 0x7fffffff;
@@ -346,10 +353,8 @@ static int measure(struct run_state *ctl)
 	ctl->measure_delta1 = HOSTDOWN;
 
 	/* empties the icmp input queue */
-	FD_ZERO(&mv.ready);
  empty:
-	FD_SET(ctl->sock_raw, &mv.ready);
-	if (select(FD_SETSIZE, &mv.ready, NULL, NULL, &mv.tout)) {
+	if (ppoll(&p, 1, &mv.tout, NULL)) {
 		mv.length = sizeof(struct sockaddr_in);
 		mv.cc = recvfrom(ctl->sock_raw, (char *)mv.packet, PACKET_IN, 0,
 			      NULL, &mv.length);
@@ -377,7 +382,6 @@ static int measure(struct run_state *ctl)
 	((uint32_t *) (oicp + 1))[0] = 0;
 	((uint32_t *) (oicp + 1))[1] = 0;
 	((uint32_t *) (oicp + 1))[2] = 0;
-	FD_ZERO(&mv.ready);
 
 	ctl->acked = ctl->seqno = ctl->seqno0 = 0;
 
@@ -396,9 +400,9 @@ static int measure(struct run_state *ctl)
 		oicp->un.echo.sequence = ++ctl->seqno;
 		oicp->checksum = 0;
 
-		gettimeofday(&mv.tv1, NULL);
+		clock_gettime(CLOCK_REALTIME, &mv.ts1);
 		*(uint32_t *) (oicp + 1) =
-		    htonl((mv.tv1.tv_sec % (24 * 60 * 60)) * 1000 + mv.tv1.tv_usec / 1000);
+		    htonl((mv.ts1.tv_sec % (24 * 60 * 60)) * 1000 + mv.ts1.tv_nsec / 1000000);
 		oicp->checksum = in_cksum((unsigned short *)oicp, sizeof(*oicp) + 12);
 
 		mv.count = sendto(ctl->sock_raw, (char *)opacket, sizeof(*oicp) + 12, 0,
@@ -427,21 +431,6 @@ static int measure(struct run_state *ctl)
 	return GOOD;
 }
 
-static void usage(void)
-{
-	fprintf(stderr, _(
-		"\nUsage:\n"
-		"  clockdiff [options] <destination>\n"
-		"\nOptions:\n"
-		"                without -o, use ip timestamp only\n"
-		"  -o            use ip timestamp and icmp echo\n"
-		"  -o1           use three-term ip timestamp and icmp echo\n"
-		"  -V            print version and exit\n"
-		"  <destination> dns name or ip address\n"
-		"\nFor more details see clockdiff(8).\n"));
-	exit(1);
-}
-
 static void drop_rights(void)
 {
 #ifdef HAVE_LIBCAP
@@ -455,11 +444,74 @@ static void drop_rights(void)
 		error(-1, errno, "setuid");
 }
 
+static void usage(int exit_status)
+{
+	drop_rights();
+	fprintf(stderr, _(
+		"\nUsage:\n"
+		"  clockdiff [options] <destination>\n"
+		"\nOptions:\n"
+		"                without -o, use icmp timestamp only (see RFC0792, page 16)\n"
+		"  -o            use ip timestamp and icmp echo\n"
+		"  -o1           use three-term ip timestamp and icmp echo\n"
+		"  -T, --time-format <ctime|iso>\n"
+		"                  specify display time format, ctime is the default\n"
+		"  -I            alias of --time-format=iso\n"
+		"  -h, --help    display this help\n"
+		"  -V, --version print version and exit\n"
+		"  <destination> dns name or ip address\n"
+		"\nFor more details see clockdiff(8).\n"));
+	exit(exit_status);
+}
+
+static void parse_opts(struct run_state *ctl, int argc, char **argv)
+{
+	static const struct option longopts[] = {
+		{"time-format", required_argument, NULL, 'T'},
+		{"version", no_argument, NULL, 'V'},
+		{"help", no_argument, NULL, 'h'},
+		{NULL, 0, NULL, 0}
+	};
+	int c;
+
+	while ((c = getopt_long(argc, argv, "o1T:IVh", longopts, NULL)) != -1)
+		switch (c) {
+		case 'o':
+			ctl->ip_opt_len = 4 + 4 * 8;
+			break;
+		case '1':
+			ctl->ip_opt_len = 4 + 3 * 8;
+			break;
+		case 'T':
+			if (!strcmp(optarg, "iso"))
+				ctl->time_format = time_format_iso;
+			else if (!strcmp(optarg, "ctime"))
+				ctl->time_format = time_format_ctime;
+			else
+				error(1, 0, "invalid time-format argument: %s",
+				      optarg);
+			break;
+		case 'I':
+			ctl->time_format = time_format_iso;
+			break;
+		case 'V':
+			printf(IPUTILS_VERSION("clockdiff"));
+			exit(0);
+		case 'h':
+			usage(0);
+			abort();
+		default:
+			printf("Try '%s --help' for more information.\n",
+			       program_invocation_short_name);
+			exit(1);
+		}
+}
+
 int main(int argc, char **argv)
 {
 	struct run_state ctl = {
 		.rtt = 1000,
-		0
+		.time_format = time_format_ctime
 	};
 	int measure_status;
 
@@ -472,14 +524,12 @@ int main(int argc, char **argv)
 	int status;
 
 	atexit(close_stdout);
-	if (argc == 2 && !strcmp(argv[1], "-V")) {
-		printf(IPUTILS_VERSION("clockdiff"));
-		return 0;
-	}
-	if (argc < 2) {
-		drop_rights();
-		usage();
-	}
+
+	parse_opts(&ctl, argc, argv);
+	argc -= optind;
+	argv += optind;
+	if (argc != 1)
+		usage(1);
 
 	ctl.sock_raw = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (ctl.sock_raw < 0)
@@ -488,26 +538,14 @@ int main(int argc, char **argv)
 		error(1, errno, "nice");
 	drop_rights();
 
-	if (argc == 3) {
-		if (strcmp(argv[1], "-o") == 0) {
-			ctl.ip_opt_len = 4 + 4 * 8;
-			argv++;
-		} else if (strcmp(argv[1], "-o1") == 0) {
-			ctl.ip_opt_len = 4 + 3 * 8;
-			argv++;
-		} else
-			usage();
-	} else if (argc != 2)
-		usage();
-
 	if (isatty(fileno(stdin)) && isatty(fileno(stdout)))
 		ctl.interactive = 1;
 
 	ctl.id = getpid();
 
-	status = getaddrinfo(argv[1], NULL, &hints, &result);
+	status = getaddrinfo(argv[0], NULL, &hints, &result);
 	if (status)
-		error(1, 0, "%s: %s", argv[1], gai_strerror(status));
+		error(1, 0, "%s: %s", argv[0], gai_strerror(status));
 	ctl.hisname = strdup(result->ai_canonname);
 
 	memcpy(&ctl.server, result->ai_addr, sizeof ctl.server);
@@ -568,11 +606,19 @@ int main(int argc, char **argv)
 	{
 		time_t now = time(NULL);
 
-		if (ctl.interactive)
+		if (ctl.interactive) {
+			char s[32];
+			struct tm tm;
+			localtime_r(&now, &tm);
+
+			if (ctl.time_format == time_format_iso) {
+				strftime(s, sizeof(s), "%Y-%m-%dT%H:%M:%S%z\n", &tm);
+			} else
+				strftime(s, sizeof(s), "%a %b %e %H:%M:%S %Y", &tm);
 			printf(_("\nhost=%s rtt=%ld(%ld)ms/%ldms delta=%dms/%dms %s"),
 				ctl.hisname, ctl.rtt, ctl.rtt_sigma, ctl.min_rtt,
-				ctl.measure_delta, ctl.measure_delta1, ctime(&now));
-		else
+				ctl.measure_delta, ctl.measure_delta1, s);
+		} else
 			printf("%ld %d %d\n", now, ctl.measure_delta, ctl.measure_delta1);
 	}
 	exit(0);

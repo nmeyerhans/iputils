@@ -29,6 +29,10 @@ xml:id="man.clockdiff">
         <option>-o1</option>
       </arg>
       <arg choice="opt" rep="norepeat">
+        <option>--time-format
+        <replaceable>ctime iso</replaceable></option>
+      </arg>
+      <arg choice="opt" rep="norepeat">
         <option>-V</option>
       </arg>
       <arg choice="req" rep="norepeat">destination</arg>
@@ -78,7 +82,43 @@ xml:id="man.clockdiff">
       </varlistentry>
       <varlistentry>
         <term>
+          <option>-T</option>
+        </term>
+        <term>
+          <option>--time-format <replaceable>ctime iso</replaceable></option>
+        </term>
+        <listitem>
+          <para>Print time stamp in output either ISO-8601 format or
+          classical ctime format. The ctime format is default. The ISO
+          time stamp includes timezone, and is easier to parse.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>-I</option>
+        </term>
+        <listitem>
+          <para>Alias of <option>--time-format <replaceable>iso</replaceable>
+          </option> option and argument.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>-h</option>
+        </term>
+        <term>
+          <option>--help</option>
+        </term>
+        <listitem>
+          <para>Print help and exit.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
           <option>-V</option>
+        </term>
+        <term>
+          <option>--version</option>
         </term>
         <listitem>
           <para>Print version and exit.</para>

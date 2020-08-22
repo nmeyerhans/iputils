@@ -2,12 +2,19 @@
 #define IPUTILS_COMMON_H
 
 #include <stdio.h>
+#include <sys/time.h>
 
 #define ARRAY_SIZE(arr) \
   (sizeof(arr) / sizeof((arr)[0]) + \
    sizeof(__typeof__(int[1 - 2 * \
 	  !!__builtin_types_compatible_p(__typeof__(arr), \
 					 __typeof__(&arr[0]))])) * 0)
+
+#ifdef __GNUC__
+# define iputils_attribute_format(t, n, m) __attribute__((__format__ (t, n, m)))
+#else
+# define iputils_attribute_format(t, n, m)
+#endif
 
 #if defined(USE_IDN) || defined(ENABLE_NLS)
 # include <locale.h>
@@ -59,5 +66,8 @@ extern int close_stream(FILE *stream);
 extern void close_stdout(void);
 extern long strtol_or_err(char const *const str, char const *const errmesg,
 			  const long min, const long max);
+extern void iputils_srand(void);
+extern void timespecsub(struct timespec *a, struct timespec *b,
+			struct timespec *res);
 
 #endif /* IPUTILS_COMMON_H */

@@ -87,9 +87,9 @@ struct interface
 #define ALLIGN(ptr)	(ptr)
 
 static int join(int sock, struct sockaddr_in *sin);
-static void solicitor(struct sockaddr_in *);
+static void solicitor(struct sockaddr_in *sin);
 #ifdef RDISC_SERVER
-static void advertise(struct sockaddr_in *, int lft);
+static void advertise(struct sockaddr_in *sin, int lft);
 #endif
 static char *pr_name(struct in_addr addr);
 static void pr_pack(char *buf, int cc, struct sockaddr_in *from);
@@ -100,7 +100,7 @@ static void del_route(struct in_addr addr);
 static void rtioctl(struct in_addr addr, int op);
 static int support_multicast(void);
 static int sendbcast(int s, char *packet, int packetlen);
-static int sendmcast(int s, char *packet, int packetlen, struct sockaddr_in *);
+static int sendmcast(int s, char *packet, int packetlen, struct sockaddr_in *sin);
 static int sendbcastif(int s, char *packet, int packetlen, struct interface *ifp);
 static int sendmcastif(int s, char *packet, int packetlen, struct sockaddr_in *sin, struct interface *ifp);
 static int is_directly_connected(struct in_addr in);
@@ -160,7 +160,7 @@ static int interfaces_size;			/* Number of elements in interfaces */
 /* fraser */
 int debugfile;
 
-int s;			/* Socket file descriptor */
+int socketfd;		/* Socket file descriptor */
 struct sockaddr_in whereto;/* Address to send to */
 
 /* Common variables */
@@ -201,7 +201,8 @@ static unsigned short in_cksum(unsigned short *addr, int len);
 
 static int logging = 0;
 
-static void logmsg(int prio, char *fmt, ...)
+iputils_attribute_format(__printf__, 2, 3)
+static void logmsg(int const prio, char const *const fmt, ...)
 {
 	va_list ap;
 
@@ -322,6 +323,13 @@ int main(int argc, char **argv)
 				break;
 			case 'V':
 				printf(IPUTILS_VERSION("rdisc"));
+				printf("Compiled %s ENABLE_RDISC_SERVER.\n",
+#ifdef RDISC_SERVER
+						"with"
+#else
+						"without"
+#endif
+				);
 				exit(0);
 #ifdef RDISC_SERVER
 			case 'T':
@@ -329,7 +337,7 @@ int main(int argc, char **argv)
 				if (argc != 0) {
 					val = strtol(av[0], (char **)NULL, 0);
 					if (val < 4 || val > 1800)
-						error(1, 0, "Bad Max Advertizement Interval: %d",
+						error(1, 0, "Bad Max Advertisement Interval: %d",
 							     val);
 					max_adv_int = val;
 					min_adv_int =( max_adv_int * 3 / 4);
@@ -419,10 +427,10 @@ next:
 
 #ifdef RDISC_SERVER
 	if (responder)
-		srandom((int)gethostid());
+		iputils_srand();
 #endif
 
-	if ((s = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) < 0) {
+	if ((socketfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) < 0) {
 		logperror("socket");
 		exit(5);
 	}
@@ -442,7 +450,7 @@ next:
 	sigaddset(&sset, SIGINT);
 
 	init();
-	if (join(s, &joinaddr) < 0) {
+	if (join(socketfd, &joinaddr) < 0) {
 		logmsg(LOG_ERR, "Failed joining addresses\n");
 		exit (2);
 	}
@@ -455,7 +463,7 @@ next:
 		socklen_t fromlen = sizeof (from);
 		int cc;
 
-		cc=recvfrom(s, (char *)packet, len, 0,
+		cc=recvfrom(socketfd, (char *)packet, len, 0,
 			    (struct sockaddr *)&from, &fromlen);
 		if (cc<0) {
 			if (errno == EINTR)
@@ -503,7 +511,7 @@ void timer()
 		else
 			left_until_advertise = min_adv_int +
 				((max_adv_int - min_adv_int) *
-				 (random() % 1000)/1000);
+				 (rand() % 1000)/1000);
 	} else
 #endif
 	if (solicit && left_until_solicit <= 0) {
@@ -548,11 +556,11 @@ solicitor(struct sockaddr_in *sin)
 	icp->checksum = in_cksum( (unsigned short *)icp, packetlen );
 
 	if (isbroadcast(sin))
-		i = sendbcast(s, (char *)outpack, packetlen);
+		i = sendbcast(socketfd, (char *)outpack, packetlen);
 	else if (ismulticast(sin))
-		i = sendmcast(s, (char *)outpack, packetlen, sin);
+		i = sendmcast(socketfd, (char *)outpack, packetlen, sin);
 	else
-		i = sendto( s, (char *)outpack, packetlen, 0,
+		i = sendto(socketfd, (char *)outpack, packetlen, 0,
 			   (struct sockaddr *)sin, sizeof(struct sockaddr));
 
 	if( i < 0 || i != packetlen )  {
@@ -608,10 +616,10 @@ advertise(struct sockaddr_in *sin, int lft)
 		rap->icmp_cksum = in_cksum( (unsigned short *)rap, packetlen );
 
 		if (isbroadcast(sin))
-			cc = sendbcastif(s, (char *)outpack, packetlen,
+			cc = sendbcastif(socketfd, (char *)outpack, packetlen,
 					&interfaces[i]);
 		else if (ismulticast(sin))
-			cc = sendmcastif( s, (char *)outpack, packetlen, sin,
+			cc = sendmcastif(socketfd, (char *)outpack, packetlen, sin,
 					&interfaces[i]);
 		else {
 			struct interface *ifp = &interfaces[i];
@@ -628,7 +636,7 @@ advertise(struct sockaddr_in *sin, int lft)
 						 ifp->name,
 						 pr_name(ifp->address));
 				}
-				cc = sendto( s, (char *)outpack, packetlen, 0,
+				cc = sendto(socketfd, (char *)outpack, packetlen, 0,
 					    (struct sockaddr *)sin,
 					    sizeof(struct sockaddr));
 			} else
@@ -873,7 +881,7 @@ pr_pack(char *buf, int cc, struct sockaddr_in *from)
 			/* Restart the timer when we broadcast */
 			left_until_advertise = min_adv_int +
 				((max_adv_int - min_adv_int)
-				 * (random() % 1000)/1000);
+				 * (rand() % 1000)/1000);
 		} else {
 			sin.sin_addr.s_addr = ip->saddr;
 			if (!is_directly_connected(sin.sin_addr)) {
@@ -1141,8 +1149,7 @@ initifs()
 	ifr = ifc.ifc_req;
 	for (i = 0, n = ifc.ifc_len/sizeof (struct ifreq); n > 0; n--, ifr++) {
 		ifreq = *ifr;
-		if (strlen(ifreq.ifr_name) >= IFNAMSIZ)
-			continue;
+
 		if (ioctl(sock, SIOCGIFFLAGS, (char *)&ifreq) < 0) {
 			logperror("initifs: ioctl (get interface flags)");
 			continue;

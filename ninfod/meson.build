@@ -10,17 +10,17 @@ ninfod_sources = files('''
 	ninfod_name.c
 '''.split())
 executable('ninfod', [ninfod_sources, git_version_h],
-	dependencies : [cap_dep, crypto_dep, rt_dep, threads],
+	dependencies : [cap_dep, rt_dep, threads],
 	link_with : [libcommon],
 	include_directories : inc,
 	install: true,
-	install_dir: get_option('sbindir'))
+	install_dir: sbindir)
 conf_data = configuration_data()
-conf_data.set('prefix', get_option('prefix'))
+conf_data.set('prefix', prefix)
 
 if systemd.found()
 	subs = configuration_data()
-	subs.set('sbindir', join_paths(get_option('prefix'), get_option('sbindir')))
+	subs.set('sbindir', sbindir)
 	unit_file = configure_file(
 		input: '../systemd/ninfod.service.in',
 		output: 'ninfod.service',
@@ -31,6 +31,5 @@ else
 	configure_file(input : 'ninfod.sh.in',
 		output : 'ninfod.sh',
 		configuration : conf_data,
-		install : true,
 		install_dir : join_paths(get_option('sysconfdir'), 'init.d'))
 endif

@@ -126,19 +126,16 @@ static struct subjinfo subjinfo_table [] = {
 	[IPUTILS_NI_ICMP6_SUBJ_IPV6] = {
 		.code = IPUTILS_NI_ICMP6_SUBJ_IPV6,
 		.name = "IPv6",
-		//.init = init_nodeinfo_ipv6addr,
 		.checksubj = pr_nodeinfo_ipv6addr,
 	},
 	[IPUTILS_NI_ICMP6_SUBJ_FQDN] = {
 		.code = IPUTILS_NI_ICMP6_SUBJ_FQDN,
 		.name = "FQDN",
-		//.init = init_nodeinfo_nodename,
 		.checksubj = pr_nodeinfo_nodename,
 	},
 	[IPUTILS_NI_ICMP6_SUBJ_IPV4] = {
 		.code = IPUTILS_NI_ICMP6_SUBJ_IPV4,
 		.name = "IPv4",
-		//.init = init_nodeinfo_ipv4addr,
 		.checksubj = pr_nodeinfo_ipv4addr,
 	},
 };
@@ -161,11 +158,11 @@ static __inline__ struct subjinfo *subjinfo_lookup(size_t code)
 #define QTYPEINFO_F_RATELIMIT	0x1
 
 struct qtypeinfo {
-	uint16_t qtype;
 	char	*name;
 	int	(*getreply)(CHECKANDFILL_ARGS);
 	void	(*init)(INIT_ARGS);
 	int	flags;
+	uint16_t qtype;
 };
 
 static struct qtypeinfo qtypeinfo_table[] = {
@@ -184,13 +181,13 @@ static struct qtypeinfo qtypeinfo_table[] = {
 		.qtype = IPUTILS_NI_QTYPE_IPV6ADDR,
 		.name = "NodeAddr",
 		.getreply = pr_nodeinfo_ipv6addr,
-		.init = init_nodeinfo_ipv6addr,
+		.init = init_nodeinfo,
 	},
 	[IPUTILS_NI_QTYPE_IPV4ADDR]	= {
 		.qtype = IPUTILS_NI_QTYPE_IPV4ADDR,
 		.name = "IPv4Addr",
 		.getreply = pr_nodeinfo_ipv4addr,
-		.init = init_nodeinfo_ipv4addr,
+		.init = init_nodeinfo,
 	},
 };
 
@@ -252,7 +249,6 @@ int pr_nodeinfo_unknown(CHECKANDFILL_ARGS_1)
 	p->reply.ni_type = IPUTILS_NI_ICMP6_REPLY;
 	p->reply.ni_code = IPUTILS_NI_ICMP6_UNKNOWN;
 	p->reply.ni_cksum = 0;
-	//p->reply.ni_qtype = 0;
 	p->reply.ni_flags = flags;
 
 	p->replydata = NULL;
@@ -270,7 +266,6 @@ int pr_nodeinfo_refused(CHECKANDFILL_ARGS_1)
 	p->reply.ni_type = IPUTILS_NI_ICMP6_REPLY;
 	p->reply.ni_code = IPUTILS_NI_ICMP6_REFUSED;
 	p->reply.ni_cksum = 0;
-	//p->reply.ni_qtype = 0;
 	p->reply.ni_flags = flags;
 
 	p->replydata = NULL;
@@ -310,21 +305,7 @@ void init_core(int forced)
 	DEBUG(LOG_DEBUG, "%s()\n", __func__);
 
 	if (!initialized || forced) {
-		struct timeval tv;
-		unsigned int seed = 0;
-		pid_t pid;
-
-		if (gettimeofday(&tv, NULL) < 0) {
-			DEBUG(LOG_WARNING, "%s(): failed to gettimeofday()\n", __func__);
-		} else {
-			seed = (tv.tv_usec & 0xffffffff);
-		}
-
-		pid = getpid();
-		seed ^= (((unsigned long)pid) & 0xffffffff);
-
-		srand(seed);
-
+		iputils_srand();
 #if ENABLE_THREADS
 		if (initialized)
 			pthread_attr_destroy(&pattr);
@@ -349,8 +330,6 @@ void init_core(int forced)
 	}
 
 	initialized = 1;
-
-	return;
 }
 
 #if ENABLE_THREADS
@@ -401,26 +380,26 @@ static int ni_send_fork(struct packetcontext *p)
 
 static int ni_ratelimit(void)
 {
-	static struct timeval last;
-	struct timeval tv, sub;
+	static struct timespec last = { 0 };
+	struct timespec now, sub;
 
-	if (gettimeofday(&tv, NULL) < 0) {
-		DEBUG(LOG_WARNING, "%s(): gettimeofday(): %s\n",
+	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) {
+		DEBUG(LOG_WARNING, "%s(): clock_gettime(): %s\n",
 		      __func__, strerror(errno));
 		return -1;
 	}
 
-	if (!timerisset(&last)) {
-		last = tv;
+	if (!(last.tv_sec || last.tv_nsec)) {
+		last = now;
 		return 0;
 	}
 
-	timersub(&tv, &last, &sub);
+	timespecsub(&now, &last, &sub);
 
 	if (sub.tv_sec < 1)
 		return 1;
 
-	last = tv;
+	last = now;
 	return 0;
 }
 
@@ -523,15 +502,10 @@ int pr_nodeinfo(struct packetcontext *p)
 
 	/* XXX: Step 5: Check the policy */
 	rc = ni_policy(p);
-	if (rc <= 0) {
+	if (rc == 0) {
 		free(p->replydata);
 		p->replydata = NULL;
 		p->replydatalen = 0;
-		if (rc < 0) {
-			DEBUG(LOG_WARNING, "Ignored by policy.\n");
-			free(p);
-			return -1;
-		}
 		DEBUG(LOG_WARNING, "Refused by policy.\n");
 		replyonsubjcheck = 0;
 		qtypeinfo = &qtypeinfo_refused;

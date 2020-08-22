@@ -268,7 +268,7 @@ static int send_pack(struct run_state *ctl)
 	memcpy(p, &ctl->gdst, 4);
 	p += 4;
 
-	clock_gettime(CLOCK_MONOTONIC_RAW, &now);
+	clock_gettime(CLOCK_MONOTONIC, &now);
 	err = sendto(ctl->socketfd, buf, p - buf, 0, (struct sockaddr *)HE, sll_len(ah->ar_hln));
 	if (err == p - buf) {
 		ctl->last = now;
@@ -323,7 +323,7 @@ static int recv_pack(struct run_state *ctl, unsigned char *buf, ssize_t len,
 	unsigned char *p = (unsigned char *)(ah + 1);
 	struct in_addr src_ip, dst_ip;
 
-	clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 
 	/* Filter out wild packets */
 	if (FROM->sll_pkttype != PACKET_HOST &&
@@ -431,14 +431,14 @@ static int recv_pack(struct run_state *ctl, unsigned char *buf, ssize_t len,
 static int outgoing_device(struct run_state *const ctl, struct nlmsghdr *nh)
 {
 	struct rtmsg *rm = NLMSG_DATA(nh);
-	int len = RTM_PAYLOAD(nh);
+	size_t len = RTM_PAYLOAD(nh);
 	struct rtattr *ra;
 
 	if (nh->nlmsg_type != RTM_NEWROUTE) {
 		error(0, 0, "NETLINK new route message type");
 		return 1;
 	}
-	for (ra = RTM_RTA(rm); RTA_OK(ra, len); ra = RTA_NEXT(ra, len)) {
+	for (ra = RTM_RTA(rm); RTA_OK(ra, (unsigned short)len); ra = RTA_NEXT(ra, len)) {
 		if (ra->rta_type == RTA_OIF) {
 			int *oif = RTA_DATA(ra);
 			static char dev_name[IF_NAMESIZE];
@@ -583,7 +583,7 @@ static int check_ifflags(struct run_state const *const ctl, unsigned int ifflags
  * Return value:
  *	>0	: Succeeded, and appropriate device not found.
  *		  device.ifindex remains 0.
- *	0	: Succeeded, and approptiate device found.
+ *	0	: Succeeded, and appropriate device found.
  *		  device.ifindex is set.
  *	<0	: Failed.  Support not found, or other
  *		: system error.
@@ -670,6 +670,7 @@ static int event_loop(struct run_state *ctl)
 	enum {
 		POLLFD_SIGNAL = 0,
 		POLLFD_TIMER,
+		POLLFD_TIMEOUT,
 		POLLFD_SOCKET,
 		POLLFD_COUNT
 	};
@@ -686,10 +687,18 @@ static int event_loop(struct run_state *ctl)
 		.it_value.tv_sec = ctl->interval,
 		.it_value.tv_nsec = 0
 	};
+	int timeoutfd;
+	struct itimerspec timeoutfd_vals = {
+		.it_interval.tv_sec = ctl->timeout,
+		.it_interval.tv_nsec = 0,
+		.it_value.tv_sec = ctl->timeout,
+		.it_value.tv_nsec = 0
+	};
 	uint64_t exp, total_expires = 1;
 
 	unsigned char packet[4096];
-	struct sockaddr_storage from = { 0 };
+	struct sockaddr_storage from;
+	memset(&from, 0, sizeof(from));
 	socklen_t addr_len = sizeof(from);
 
 	/* signalfd */
@@ -709,7 +718,7 @@ static int event_loop(struct run_state *ctl)
 	pfds[POLLFD_SIGNAL].fd = sfd;
 	pfds[POLLFD_SIGNAL].events = POLLIN | POLLERR | POLLHUP;
 
-	/* timerfd */
+	/* interval timerfd */
 	tfd = timerfd_create(CLOCK_MONOTONIC, 0);
 	if (tfd == -1) {
 		error(0, errno, "timerfd_create failed");
@@ -721,6 +730,19 @@ static int event_loop(struct run_state *ctl)
 	}
 	pfds[POLLFD_TIMER].fd = tfd;
 	pfds[POLLFD_TIMER].events = POLLIN | POLLERR | POLLHUP;
+
+	/* timeout timerfd */
+	timeoutfd = timerfd_create(CLOCK_MONOTONIC, 0);
+	if (tfd == -1) {
+		error(0, errno, "timerfd_create failed");
+		return 1;
+	}
+	if (timerfd_settime(timeoutfd, 0, &timeoutfd_vals, NULL)) {
+		error(0, errno, "timerfd_settime failed");
+		return 1;
+	}
+	pfds[POLLFD_TIMEOUT].fd = timeoutfd;
+	pfds[POLLFD_TIMEOUT].events = POLLIN | POLLERR | POLLHUP;
 
 	/* socket */
 	pfds[POLLFD_SOCKET].fd = ctl->socketfd;
@@ -770,6 +792,9 @@ static int event_loop(struct run_state *ctl)
 				}
 				send_pack(ctl);
 				break;
+			case POLLFD_TIMEOUT:
+				exit_loop = 1;
+				break;
 			case POLLFD_SOCKET:
 				if ((s =
 				     recvfrom(ctl->socketfd, packet, sizeof(packet), 0,
@@ -792,7 +817,13 @@ static int event_loop(struct run_state *ctl)
 	close(tfd);
 	freeifaddrs(ctl->ifa0);
 	rc |= finish(ctl);
-	rc |= (ctl->sent != ctl->received);
+	if (ctl->unsolicited)
+		/* nothing */;
+	else if (ctl->dad && ctl->quit_on_reply)
+		/* Duplicate address detection mode return value */
+		rc |= !(ctl->brd_sent != ctl->received);
+	else
+		rc |= (ctl->sent != ctl->received);
 	return rc;
 }
 
@@ -937,7 +968,7 @@ int main(int argc, char **argv)
 		}
 		memset(&saddr, 0, sizeof(saddr));
 		saddr.sin_family = AF_INET;
-		if (ctl.source || ctl.gsrc.s_addr) {
+		if (!ctl.unsolicited && (ctl.source || ctl.gsrc.s_addr)) {
 			saddr.sin_addr = ctl.gsrc;
 			if (bind(probe_fd, (struct sockaddr *)&saddr, sizeof(saddr)) == -1)
 				error(2, errno, "bind");

@@ -31,6 +31,8 @@
  * Author:
  * 	YOSHIFUJI Hideaki <yoshfuji@linux-ipv6.org>
  */
+#ifndef IPUTILS_NINFOD_H
+#define IPUTILS_NINFOD_H
 
 /* definitions */
 #define NINFOD			"ninfod"
@@ -100,7 +102,7 @@ int ni_recv(struct packetcontext *p);
 int ni_send(struct packetcontext *p);
 
 /* ninfod_core.c */
-extern void DEBUG(int pri, char *fmt, ...);
+extern void DEBUG(int const pri, char const *const fmt, ...);
 
 void init_core(int forced);
 int pr_nodeinfo(struct packetcontext *p);
@@ -110,12 +112,12 @@ int pr_nodeinfo_refused(CHECKANDFILL_ARGS);
 int pr_nodeinfo_noop(CHECKANDFILL_ARGS);
 
 /* ninfod_addrs.c */
-void init_nodeinfo_ipv6addr(INIT_ARGS __attribute__((__unused__)));
 int pr_nodeinfo_ipv6addr(CHECKANDFILL_ARGS);
-void init_nodeinfo_ipv4addr(INIT_ARGS __attribute__((__unused__)));
+void init_nodeinfo(INIT_ARGS __attribute__((__unused__)));
 int pr_nodeinfo_ipv4addr(CHECKANDFILL_ARGS);
 
 /* ninfod_name.c */
 void init_nodeinfo_nodename(INIT_ARGS);
 int pr_nodeinfo_nodename(CHECKANDFILL_ARGS);
 
+#endif /* IPUTILS_NINFOD_H */

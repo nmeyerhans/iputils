@@ -6,6 +6,9 @@ iputils (3:20200821-1) UNRELEASED; urgency=medium
   * Switch to debhelper compat level 13
   * Install upstream's CHANGES file in binary packages
   * Let dh_auto_configure pass a crossfile to meson (Closes: #962080)
+  * Package metadata updates:
+    - Add repository and bug tracker details to debian/upstream/metadata
+    - Add Homepage field to debian/control
 
  -- Noah Meyerhans <noahm@debian.org>  Wed, 06 May 2020 21:25:15 -0700
 
@@ -467,4 +470,3 @@ iputils (990107-1) unstable; urgency=low
   * Initial Release.
 
  -- Anthony Towns <ajt@debian.org>  Sat,  5 Aug 2000 19:51:36 +1000
-

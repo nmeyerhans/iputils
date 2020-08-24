@@ -21,7 +21,6 @@ override_dh_auto_configure:
 		-DBUILD_HTML_MANS=false \
 		-DBUILD_TRACEROUTE6=true \
 		-DNO_SETCAP_OR_SUID=true \
-		-DUSE_CRYPTO=gcrypt \
 		-DUSE_GETTEXT=false
 
 override_dh_auto_test:

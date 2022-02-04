@@ -65,7 +65,7 @@
 
 #define	MAXWAIT		10		/* max seconds to wait for response */
 #define MININTERVAL	10		/* Minimal interpacket gap */
-#define MINUSERINTERVAL	200		/* Minimal allowed interval for non-root */
+#define MINUSERINTERVAL	2		/* Minimal allowed interval for non-root */
 
 #define SCHINT(a)	(((a) <= MININTERVAL) ? MININTERVAL : (a))
 
@@ -140,7 +140,7 @@ struct ping_ni {
 
 /*ping runtime state */
 struct ping_rts {
-	int mark;
+	unsigned int mark;
 	unsigned char *outpack;
 
 	struct rcvd_table rcvd_tbl;
@@ -192,6 +192,7 @@ struct ping_rts {
 	struct sockaddr_in6 source6;
 	struct sockaddr_in6 whereto6;
 	struct sockaddr_in6 firsthop6;
+	int multicast;
 
 	/* Used only in ping.c */
 	int ts_type;
@@ -201,7 +202,6 @@ struct ping_rts {
 	int optlen;
 	int settos;			/* Set TOS, Precedence or other QOS options */
 	int broadcast_pings;
-	int multicast;
 	struct sockaddr_in source;
 
 	/* Used only in ping_common.c */
@@ -212,6 +212,7 @@ struct ping_rts {
 #endif
 
 	/* Used only in ping6_common.c */
+	int subnet_router_anycast; /* Subnet-Router anycast (RFC 4291) */
 	struct sockaddr_in6 firsthop;
 	unsigned char cmsgbuf[4096];
 	size_t cmsglen;
@@ -379,8 +380,8 @@ char *pr_addr(struct ping_rts *rts, void *sa, socklen_t salen);
 int is_ours(struct ping_rts *rts, socket_st *sock, uint16_t id);
 extern int pinger(struct ping_rts *rts, ping_func_set_st *fset, socket_st *sock);
 extern void sock_setbufs(struct ping_rts *rts, socket_st *, int alloc);
+extern void sock_setmark(unsigned int mark, int fd);
 extern void setup(struct ping_rts *rts, socket_st *);
-extern int contains_pattern_in_payload(struct ping_rts *rts, uint8_t *ptr);
 extern int main_loop(struct ping_rts *rts, ping_func_set_st *fset, socket_st*,
 		     uint8_t *packet, int packlen);
 extern int finish(struct ping_rts *rts);
@@ -389,7 +390,8 @@ extern void common_options(int ch);
 extern int gather_statistics(struct ping_rts *rts, uint8_t *icmph, int icmplen,
 			     int cc, uint16_t seq, int hops,
 			     int csfailed, struct timeval *tv, char *from,
-			     void (*pr_reply)(uint8_t *ptr, int cc), int multicast);
+			     void (*pr_reply)(uint8_t *ptr, int cc), int multicast,
+			     int wrong_source);
 extern void print_timestamp(struct ping_rts *rts);
 void fill(struct ping_rts *rts, char *patp, unsigned char *packet, size_t packet_size);
 

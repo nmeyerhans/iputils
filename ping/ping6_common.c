@@ -61,6 +61,7 @@
 
 #include "iputils_common.h"
 #include "iputils_ni.h"
+#include "ipv6.h"
 #include "ping.h"
 
 #ifndef IPV6_FLOWLABEL_MGR
@@ -101,6 +102,7 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 	      struct socket_st *sock)
 {
 	int hold, packlen;
+	size_t i;
 	unsigned char *packet;
 	char *target;
 	struct icmp6_filter filter;
@@ -181,6 +183,9 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 		    !IN6_IS_ADDR_MC_LINKLOCAL(&rts->firsthop.sin6_addr))
 			rts->firsthop.sin6_family = AF_INET6;
 
+		if (rts->opt_mark)
+			sock_setmark(rts->mark, probe_fd);
+
 		rts->firsthop.sin6_port = htons(1025);
 		if (connect(probe_fd, (struct sockaddr *)&rts->firsthop, sizeof(rts->firsthop)) == -1) {
 			if ((errno == EHOSTUNREACH || errno == ENETUNREACH) && ai->ai_next) {
@@ -222,6 +227,8 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 	if (rts->device) {
 		struct cmsghdr *cmsg;
 		struct in6_pktinfo *ipi;
+		int rc;
+		int errno_save;
 
 		cmsg = (struct cmsghdr *)(rts->cmsgbuf + rts->cmsglen);
 		rts->cmsglen += CMSG_SPACE(sizeof(*ipi));
@@ -232,6 +239,17 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 		ipi = (struct in6_pktinfo *)CMSG_DATA(cmsg);
 		memset(ipi, 0, sizeof(*ipi));
 		ipi->ipi6_ifindex = if_name2index(rts->device);
+
+		if (rts->opt_strictsource) {
+			enable_capability_raw();
+			rc = setsockopt(sock->fd, SOL_SOCKET, SO_BINDTODEVICE,
+					rts->device, strlen(rts->device) + 1);
+			errno_save = errno;
+			disable_capability_raw();
+
+			if (rc == -1)
+				error(2, errno_save, "SO_BINDTODEVICE %s", rts->device);
+		}
 	}
 
 	if (IN6_IS_ADDR_MULTICAST(&rts->whereto6.sin6_addr)) {
@@ -245,6 +263,15 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 		}
 		if (rts->pmtudisc < 0)
 			rts->pmtudisc = IPV6_PMTUDISC_DO;
+	}
+
+	/* detect Subnet-Router anycast at least for the default prefix 64 */
+	rts->subnet_router_anycast = 1;
+	for (i = 8; i < sizeof(struct in6_addr); i++) {
+		if (rts->whereto6.sin6_addr.s6_addr[i]) {
+			rts->subnet_router_anycast = 0;
+			break;
+		}
 	}
 
 	if (rts->pmtudisc >= 0) {
@@ -792,6 +819,7 @@ int ping6_parse_reply(struct ping_rts *rts, socket_st *sock,
 	struct cmsghdr *c;
 	struct icmp6_hdr *icmph;
 	int hops = -1;
+	int wrong_source = 0;
 
 	for (c = CMSG_FIRSTHDR(msg); c; c = CMSG_NXTHDR(msg, c)) {
 		if (c->cmsg_level != IPPROTO_IPV6)
@@ -818,18 +846,18 @@ int ping6_parse_reply(struct ping_rts *rts, socket_st *sock,
 	}
 
 	if (icmph->icmp6_type == ICMP6_ECHO_REPLY) {
-		if (!rts->multicast &&
-		    memcmp(&from->sin6_addr.s6_addr, &rts->whereto6.sin6_addr.s6_addr, 16))
-			return 1;
 		if (!is_ours(rts, sock, icmph->icmp6_id))
 			return 1;
-	       if (!contains_pattern_in_payload(rts, (uint8_t *)(icmph + 1)))
-			return 1;	/* 'Twas really not our ECHO */
+
+		if (!rts->multicast && !rts->subnet_router_anycast &&
+		    memcmp(&from->sin6_addr.s6_addr, &rts->whereto6.sin6_addr.s6_addr, 16))
+			wrong_source = 1;
+
 		if (gather_statistics(rts, (uint8_t *)icmph, sizeof(*icmph), cc,
 				      ntohs(icmph->icmp6_seq),
 				      hops, 0, tv, pr_addr(rts, from, sizeof *from),
 				      pr_echo_reply,
-				      rts->multicast)) {
+				      rts->multicast, wrong_source)) {
 			fflush(stdout);
 			return 0;
 		}
@@ -842,7 +870,7 @@ int ping6_parse_reply(struct ping_rts *rts, socket_st *sock,
 				      seq,
 				      hops, 0, tv, pr_addr(rts, from, sizeof *from),
 				      pr_niquery_reply,
-				      rts->multicast))
+				      rts->multicast, 0))
 			return 0;
 	} else {
 		int nexthdr;
@@ -864,7 +892,7 @@ int ping6_parse_reply(struct ping_rts *rts, socket_st *sock,
 
 		nexthdr = iph1->ip6_nxt;
 
-		if (nexthdr == 44) {
+		if (nexthdr == NEXTHDR_FRAGMENT) {
 			nexthdr = *(uint8_t *)icmph1;
 			icmph1++;
 		}

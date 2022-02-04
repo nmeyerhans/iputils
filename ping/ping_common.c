@@ -446,6 +446,25 @@ void sock_setbufs(struct ping_rts *rts, socket_st *sock, int alloc)
 	}
 }
 
+void sock_setmark(unsigned int mark, int fd)
+{
+#ifdef SO_MARK
+	int ret;
+	int errno_save;
+
+	enable_capability_admin();
+	ret = setsockopt(fd, SOL_SOCKET, SO_MARK, &mark, sizeof(mark));
+	errno_save = errno;
+	disable_capability_admin();
+
+	/* Do not exit, old kernels do not support mark. */
+	if (ret == -1)
+		error(0, errno_save, _("WARNING: failed to set mark: %d"), mark);
+#else
+		error(0, errno_save, _("WARNING: SO_MARK not supported"));
+#endif
+}
+
 /* Protocol independent setup and parameter checks. */
 
 void setup(struct ping_rts *rts, socket_st *sock)
@@ -476,22 +495,9 @@ void setup(struct ping_rts *rts, socket_st *sock)
 			error(0, 0, _("Warning: no SO_TIMESTAMP support, falling back to SIOCGSTAMP"));
 	}
 #endif
-#ifdef SO_MARK
-	if (rts->opt_mark) {
-		int ret;
-		int errno_save;
 
-		enable_capability_admin();
-		ret = setsockopt(sock->fd, SOL_SOCKET, SO_MARK, &rts->mark, sizeof(rts->mark));
-		errno_save = errno;
-		disable_capability_admin();
-
-		if (ret == -1) {
-			/* Do not exit, old kernels do not support mark. */
-			error(0, errno_save, _("Warning: Failed to set mark: %d"), rts->mark);
-		}
-	}
-#endif
+	if (rts->opt_mark)
+		sock_setmark(rts->mark, sock->fd);
 
 	/* Set some SNDTIMEO to prevent blocking forever
 	 * on sends, when device is too slow or stalls. Just put limit
@@ -551,24 +557,6 @@ void setup(struct ping_rts *rts, socket_st *sock)
 				rts->screen_width = w.ws_col;
 		}
 	}
-}
-
-/*
- * Return 0 if pattern in payload point to be ptr did not match the pattern that was sent  
- */
-int contains_pattern_in_payload(struct ping_rts *rts, uint8_t *ptr)
-{
-	size_t i;
-	uint8_t *cp, *dp;
- 
-	/* check the data */
-	cp = ((u_char *)ptr) + sizeof(struct timeval);
-	dp = &rts->outpack[8 + sizeof(struct timeval)];
-	for (i = sizeof(struct timeval); i < rts->datalen; ++i, ++cp, ++dp) {
-		if (*cp != *dp)
-			return 0;
-	}
-	return 1;
 }
 
 int main_loop(struct ping_rts *rts, ping_func_set_st *fset, socket_st *sock,
@@ -729,7 +717,8 @@ int main_loop(struct ping_rts *rts, ping_func_set_st *fset, socket_st *sock,
 int gather_statistics(struct ping_rts *rts, uint8_t *icmph, int icmplen,
 		      int cc, uint16_t seq, int hops,
 		      int csfailed, struct timeval *tv, char *from,
-		      void (*pr_reply)(uint8_t *icmph, int cc), int multicast)
+		      void (*pr_reply)(uint8_t *icmph, int cc), int multicast,
+		      int wrong_source)
 {
 	int dupflag = 0;
 	long triptime = 0;
@@ -822,10 +811,13 @@ restamp:
 				printf(_(" time=%ld.%03ld ms"), triptime / 1000,
 				       triptime % 1000);
 		}
+
 		if (dupflag && (!multicast || rts->opt_verbose))
 			printf(_(" (DUP!)"));
 		if (csfailed)
 			printf(_(" (BAD CHECKSUM!)"));
+		if (wrong_source)
+			printf(_(" (DIFFERENT ADDRESS!)"));
 
 		/* check the data */
 		cp = ((unsigned char *)ptr) + sizeof(struct timeval);

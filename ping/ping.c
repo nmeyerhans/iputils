@@ -150,8 +150,8 @@ static void create_socket(struct ping_rts *rts, socket_st *sock, int family,
 		/* Report error related to disabled IPv6 only when IPv6 also failed or in
 		 * verbose mode. Report other errors always.
 		 */
-		if ((errno == EAFNOSUPPORT && family == AF_INET6) ||
-		    rts->opt_verbose || requisite)
+		if ((errno == EAFNOSUPPORT && family == AF_INET6 && requisite) ||
+		    rts->opt_verbose)
 			error(0, errno, "socket");
 		if (requisite)
 			exit(2);
@@ -420,7 +420,7 @@ main(int argc, char **argv)
 			rts.opt_noloop = 1;
 			break;
 		case 'm':
-			rts.mark = strtol_or_err(optarg, _("invalid argument"), 0, INT_MAX);
+			rts.mark = strtol_or_err(optarg, _("invalid argument"), 0, UINT_MAX);
 			rts.opt_mark = 1;
 			break;
 		case 'M':
@@ -594,6 +594,46 @@ main(int argc, char **argv)
 	return ret_val;
 }
 
+static int iface_name2index(struct ping_rts *rts, int fd)
+{
+	struct ifreq ifr;
+
+	memset(&ifr, 0, sizeof(ifr));
+	strncpy(ifr.ifr_name, rts->device, IFNAMSIZ - 1);
+
+	if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
+		error(2, 0, _("unknown iface: %s"), rts->device);
+
+	return ifr.ifr_ifindex;
+}
+
+static void bind_to_device(struct ping_rts *rts, int fd, in_addr_t addr)
+{
+	int rc;
+	int errno_save;
+
+	enable_capability_raw();
+	rc = setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, rts->device,
+			strlen(rts->device) + 1);
+	errno_save = errno;
+	disable_capability_raw();
+
+	if (rc != -1)
+		return;
+
+	if (IN_MULTICAST(ntohl(addr))) {
+		struct ip_mreqn imr;
+
+		memset(&imr, 0, sizeof(imr));
+		imr.imr_ifindex = iface_name2index(rts, fd);
+
+		if (setsockopt(fd, SOL_IP, IP_MULTICAST_IF, &imr, sizeof(imr)) == -1)
+			error(2, errno, "IP_MULTICAST_IF");
+	} else {
+		error(2, errno_save, "SO_BINDTODEVICE %s", rts->device);
+	}
+}
+
 /* return >= 0: exit with this code, < 0: go on to next addrinfo result */
 int ping4_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 	      socket_st *sock)
@@ -665,44 +705,18 @@ int ping4_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 
 		if (probe_fd < 0)
 			error(2, errno, "socket");
+
 		if (rts->device) {
-			struct ifreq ifr;
-			int i;
-			int fds[2] = {probe_fd, sock->fd};
-
-			memset(&ifr, 0, sizeof(ifr));
-			strncpy(ifr.ifr_name, rts->device, IFNAMSIZ - 1);
-
-			for (i = 0; i < 2; i++) {
-				int fd = fds[i];
-				int rc;
-				int errno_save;
-
-				enable_capability_raw();
-				rc = setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,
-						rts->device, strlen(rts->device) + 1);
-				errno_save = errno;
-				disable_capability_raw();
-
-				if (rc == -1) {
-					if (IN_MULTICAST(ntohl(dst.sin_addr.s_addr))) {
-						struct ip_mreqn imr;
-						if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
-							error(2, 0, _("unknown iface: %s"), rts->device);
-						memset(&imr, 0, sizeof(imr));
-						imr.imr_ifindex = ifr.ifr_ifindex;
-						if (setsockopt(fd, SOL_IP, IP_MULTICAST_IF,
-							       &imr, sizeof(imr)) == -1)
-							error(2, errno, "IP_MULTICAST_IF");
-					} else
-						error(2, errno_save, "SO_BINDTODEVICE %s", rts->device);
-				}
-			}
+			bind_to_device(rts, probe_fd, dst.sin_addr.s_addr);
+			bind_to_device(rts, sock->fd, dst.sin_addr.s_addr);
 		}
 
 		if (rts->settos &&
 		    setsockopt(probe_fd, IPPROTO_IP, IP_TOS, (char *)&rts->settos, sizeof(int)) < 0)
 			error(0, errno, _("warning: QOS sockopts"));
+
+		if (rts->opt_mark)
+			sock_setmark(rts->mark, probe_fd);
 
 		dst.sin_port = htons(1025);
 		if (rts->nroute)
@@ -758,47 +772,11 @@ int ping4_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 		close(probe_fd);
 
 	} else if (rts->device) {
-		struct sockaddr_in dst = rts->whereto;
-		struct ifreq ifr;
-		int fd = sock->fd;
-		int rc;
-		int errno_save;
-
-		memset(&ifr, 0, sizeof(ifr));
-		strncpy(ifr.ifr_name, rts->device, IFNAMSIZ - 1);
-
-		enable_capability_raw();
-		rc = setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, rts->device, strlen(rts->device) + 1);
-		errno_save = errno;
-		disable_capability_raw();
-
-		if (rc == -1) {
-			if (IN_MULTICAST(ntohl(dst.sin_addr.s_addr))) {
-				struct ip_mreqn imr;
-
-				if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
-					error(2, 0, "%s: %s", _("unknown interface"), rts->device);
-				memset(&imr, 0, sizeof(imr));
-				imr.imr_ifindex = ifr.ifr_ifindex;
-				if (setsockopt(fd, SOL_IP, IP_MULTICAST_IF,
-					       &imr, sizeof(imr)) == -1)
-					error(2, errno, "IP_MULTICAST_IF");
-			} else
-				error(2, errno_save, "SO_BINDTODEVICE %s", rts->device);
-		}
+		bind_to_device(rts, sock->fd, rts->whereto.sin_addr.s_addr);
 	}
 
 	if (rts->whereto.sin_addr.s_addr == 0)
 		rts->whereto.sin_addr.s_addr = rts->source.sin_addr.s_addr;
-
-	if (rts->device) {
-		struct ifreq ifr;
-
-		memset(&ifr, 0, sizeof(ifr));
-		strncpy(ifr.ifr_name, rts->device, IFNAMSIZ - 1);
-		if (ioctl(sock->fd, SIOCGIFINDEX, &ifr) < 0)
-			error(2, 0, _("unknown iface: %s"), rts->device);
-	}
 
 	if (rts->broadcast_pings || IN_MULTICAST(ntohl(rts->whereto.sin_addr.s_addr))) {
 		rts->multicast = 1;
@@ -1504,6 +1482,7 @@ int ping4_parse_reply(struct ping_rts *rts, struct socket_st *sock,
 	int reply_ttl;
 	uint8_t *opts, *tmp_ttl;
 	int olen;
+	int wrong_source = 0;
 
 	/* Check the IP header */
 	ip = (struct iphdr *)buf;
@@ -1544,17 +1523,16 @@ int ping4_parse_reply(struct ping_rts *rts, struct socket_st *sock,
 	csfailed = in_cksum((unsigned short *)icp, cc, 0);
 
 	if (icp->type == ICMP_ECHOREPLY) {
-		if (!rts->broadcast_pings && !rts->multicast &&
-		    from->sin_addr.s_addr != rts->whereto.sin_addr.s_addr)
-			return 1;
 		if (!is_ours(rts, sock, icp->un.echo.id))
 			return 1;			/* 'Twas not our ECHO */
-		if (!contains_pattern_in_payload(rts, (uint8_t *)(icp + 1)))
-			return 1;			/* 'Twas really not our ECHO */
+
+		if (!rts->broadcast_pings && !rts->multicast &&
+		    from->sin_addr.s_addr != rts->whereto.sin_addr.s_addr)
+			wrong_source = 1;
 		if (gather_statistics(rts, (uint8_t *)icp, sizeof(*icp), cc,
 				      ntohs(icp->un.echo.sequence),
 				      reply_ttl, 0, tv, pr_addr(rts, from, sizeof *from),
-				      pr_echo_reply, rts->multicast)) {
+				      pr_echo_reply, rts->multicast, wrong_source)) {
 			fflush(stdout);
 			return 0;
 		}

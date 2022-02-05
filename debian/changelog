@@ -1,3 +1,9 @@
+iputils (3:20211215-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #971044, #699238)
+
+ --
+
 iputils (3:20210202-1) unstable; urgency=medium
 
   * New upstream version

@@ -4,7 +4,7 @@ iputils (3:20211215-1) unstable; urgency=medium
   * Drop traceroute6 binary, which is no longer provided upstream
   * Add iproute2 to build-deps for upstream tests
 
- --
+ -- Noah Meyerhans <noahm@debian.org>  Fri, 04 Feb 2022 20:37:10 -0800
 
 iputils (3:20210202-1) unstable; urgency=medium
 

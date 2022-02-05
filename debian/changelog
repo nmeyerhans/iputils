@@ -2,6 +2,7 @@ iputils (3:20211215-1) unstable; urgency=medium
 
   * New upstream release (Closes: #971044, #699238)
   * Drop traceroute6 binary, which is no longer provided upstream
+  * Add iproute2 to build-deps for upstream tests
 
  --
 

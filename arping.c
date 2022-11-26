@@ -10,6 +10,8 @@
  * 		YOSHIFUJI Hideaki <yoshfuji@linux-ipv6.org>
  */
 
+#define _GNU_SOURCE
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <ifaddrs.h>
@@ -759,7 +761,7 @@ static int event_loop(struct run_state *ctl)
 
 	/* timeout timerfd */
 	timeoutfd = timerfd_create(CLOCK_MONOTONIC, 0);
-	if (tfd == -1) {
+	if (timeoutfd == -1) {
 		error(0, errno, "timerfd_create failed");
 		return 1;
 	}
@@ -848,6 +850,8 @@ static int event_loop(struct run_state *ctl)
 	else if (ctl->dad && ctl->quit_on_reply)
 		/* Duplicate address detection mode return value */
 		rc |= !(ctl->brd_sent != ctl->received);
+	else if (ctl->timeout && !(ctl->count > 0))
+		rc |= !(ctl->received > 0);
 	else
 		rc |= (ctl->sent != ctl->received);
 	return rc;
@@ -914,6 +918,7 @@ int main(int argc, char **argv)
 			break;
 		case 'V':
 			printf(IPUTILS_VERSION("arping"));
+			print_config();
 			exit(0);
 		case 'h':
 		case '?':

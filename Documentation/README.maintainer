@@ -61,7 +61,7 @@ Assuming things are great push to github.
     git push origin master:master
     git push origin --tags
 
-Go to github https://github.com/iputils/iputils/releases and paste the
+Go to github https://github.com/iputils/iputils/releases and paste
 the content of CHANGES file for upcoming release to the text box.
 Add there also credit for all contributors:
 
@@ -93,6 +93,8 @@ Sign tarballs and sha256 hash:
     gpg --clearsign $out
 
 and upload all these four files to the release as additional files.
+
+NOTE: if you use more keys, use -u KEY to specify which key should be used.
 
 The release should be ready.  People tend to react to releases, so expect bug
 reports and pull requests after release.  Assuming release has fatal flaw(s)

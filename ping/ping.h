@@ -1,7 +1,8 @@
 #ifndef IPUTILS_PING_H
 #define IPUTILS_PING_H
 
-/* Includes */
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -55,7 +56,6 @@
 #include <linux/types.h>
 #include <linux/errqueue.h>
 #include <linux/in6.h>
-/* All includes done. */
 
 #ifndef SCOPE_DELIMITER
 # define SCOPE_DELIMITER '%'
@@ -66,6 +66,7 @@
 #define	MAXWAIT		10		/* max seconds to wait for response */
 #define MININTERVAL	10		/* Minimal interpacket gap */
 #define MINUSERINTERVAL	2		/* Minimal allowed interval for non-root */
+#define IDENTIFIER_MAX	0xFFFF		/* max unsigned 2-byte value */
 
 #define SCHINT(a)	(((a) <= MININTERVAL) ? MININTERVAL : (a))
 
@@ -242,7 +243,8 @@ struct ping_rts {
 		opt_tclass:1,
 		opt_timestamp:1,
 		opt_ttl:1,
-		opt_verbose:1;
+		opt_verbose:1,
+		opt_connect_sk:1;
 };
 /* FIXME: global_rts will be removed in future */
 extern struct ping_rts *global_rts;
@@ -316,6 +318,7 @@ static inline void set_signal(int signo, void (*handler)(int))
 	memset(&sa, 0, sizeof(sa));
 
 	sa.sa_handler = (void (*)(int))handler;
+	sa.sa_flags = SA_RESTART;
 	sigaction(signo, &sa, NULL);
 }
 

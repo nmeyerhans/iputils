@@ -8,16 +8,8 @@ if build_clockdiff == true
   subdir('clockdiff')
 endif
 
-if build_ninfod == true
-  subdir('ninfod')
-endif
-
 if build_ping == true
   subdir('ping')
-endif
-
-if build_rarpd == true
-  subdir('rarpd')
 endif
 
 if build_tracepath == true

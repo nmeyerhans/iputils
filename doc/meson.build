@@ -16,20 +16,8 @@ if build_ping == true
 	manpages += ['ping']
 endif
 
-if build_rarpd == true
-	manpages += ['rarpd']
-endif
-
-if build_rdisc == true
-	manpages += ['rdisc']
-endif
-
 if build_tracepath == true
 	manpages += ['tracepath']
-endif
-
-if build_ninfod == true
-	manpages += ['ninfod']
 endif
 
 xsltproc = find_program('xsltproc', required : build_mans or build_html_mans)

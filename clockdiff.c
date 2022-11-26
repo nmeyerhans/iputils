@@ -49,6 +49,8 @@
  * number of messages sent in each measurement.
  */
 
+#define _GNU_SOURCE
+
 #define TSPTYPES
 
 #include <arpa/inet.h>
@@ -496,6 +498,7 @@ static void parse_opts(struct run_state *ctl, int argc, char **argv)
 			break;
 		case 'V':
 			printf(IPUTILS_VERSION("clockdiff"));
+			print_config();
 			exit(0);
 		case 'h':
 			usage(0);

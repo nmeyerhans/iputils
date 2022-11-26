@@ -29,6 +29,9 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+
+#define _GNU_SOURCE
+
 #include "iputils_common.h"
 #include "ping.h"
 
@@ -51,8 +54,12 @@ void usage(void)
 		"  -A                 use adaptive ping\n"
 		"  -B                 sticky source address\n"
 		"  -c <count>         stop after <count> replies\n"
+		"  -C                 call connect() syscall on socket creation\n"
 		"  -D                 print timestamps\n"
 		"  -d                 use SO_DEBUG socket option\n"
+		"  -e <identifier>    define identifier for ping session, default is random for\n"
+		"                     SOCK_RAW and kernel defined for SOCK_DGRAM\n"
+		"                     Imply using SOCK_RAW (for IPv4 only for identifier 0)\n"
 		"  -f                 flood ping\n"
 		"  -h                 print help and exit\n"
 		"  -I <interface>     either interface name or address\n"
@@ -459,7 +466,7 @@ void sock_setmark(unsigned int mark, int fd)
 
 	/* Do not exit, old kernels do not support mark. */
 	if (ret == -1)
-		error(0, errno_save, _("WARNING: failed to set mark: %d"), mark);
+		error(0, errno_save, _("WARNING: failed to set mark: %u"), mark);
 #else
 		error(0, errno_save, _("WARNING: SO_MARK not supported"));
 #endif
@@ -527,8 +534,8 @@ void setup(struct ping_rts *rts, socket_st *sock)
 			*p++ = i;
 	}
 
-	if (sock->socktype == SOCK_RAW)
-		rts->ident = rand() & 0xFFFF;
+	if (sock->socktype == SOCK_RAW && rts->ident == -1)
+		rts->ident = rand() & IDENTIFIER_MAX;
 
 	set_signal(SIGINT, sigexit);
 	set_signal(SIGALRM, sigexit);
@@ -790,6 +797,9 @@ restamp:
 
 		if (pr_reply)
 			pr_reply(icmph, cc);
+
+		if (rts->opt_verbose && rts->ident != -1)
+			printf(_(" ident=%d"), ntohs(rts->ident));
 
 		if (hops >= 0)
 			printf(_(" ttl=%d"), hops);

@@ -23,7 +23,6 @@
 #include <string.h>
 #include <netdb.h>
 #include <setjmp.h>
-#include <netinet/icmp6.h>
 #include <asm/byteorder.h>
 #include <sched.h>
 #include <math.h>
@@ -64,15 +63,26 @@
 #define	DEFDATALEN	(64 - 8)	/* default data length */
 
 #define	MAXWAIT		10		/* max seconds to wait for response */
-#define MININTERVAL	10		/* Minimal interpacket gap */
-#define MINUSERINTERVAL	2		/* Minimal allowed interval for non-root */
+#define MIN_INTERVAL_MS	10		/* Minimal interpacket gap */
+#define MIN_USER_INTERVAL_MS	2		/* Minimal allowed interval for non-root for single host ping */
+#define MIN_MULTICAST_USER_INTERVAL_MS	1000	/* Minimal allowed interval for non-root for broadcast/multicast ping */
 #define IDENTIFIER_MAX	0xFFFF		/* max unsigned 2-byte value */
 
-#define SCHINT(a)	(((a) <= MININTERVAL) ? MININTERVAL : (a))
+#define SCHINT(a)	(((a) <= MIN_INTERVAL_MS) ? MIN_INTERVAL_MS : (a))
 
 
 #ifndef MSG_CONFIRM
 #define MSG_CONFIRM 0
+#endif
+
+/* RFC 4443 addition not yet available in libc headers */
+#ifndef ICMP6_DST_UNREACH_POLICYFAIL
+#define ICMP6_DST_UNREACH_POLICYFAIL 5
+#endif
+
+/* RFC 4443 addition not yet available in libc headers */
+#ifndef ICMP6_DST_UNREACH_REJECTROUTE
+#define ICMP6_DST_UNREACH_REJECTROUTE 6
 #endif
 
 /*
@@ -149,7 +159,7 @@ struct ping_rts {
 	size_t datalen;
 	char *hostname;
 	uid_t uid;
-	int ident;			/* random id to identify our packets */
+	int ident;			/* process id to identify our packets */
 
 	int sndbuf;
 	int ttl;
@@ -226,6 +236,7 @@ struct ping_rts {
 		opt_flood:1,
 		opt_flood_poll:1,
 		opt_flowinfo:1,
+		opt_force_lookup:1,
 		opt_interval:1,
 		opt_latency:1,
 		opt_mark:1,
@@ -240,7 +251,6 @@ struct ping_rts {
 		opt_so_dontroute:1,
 		opt_sourceroute:1,
 		opt_strictsource:1,
-		opt_tclass:1,
 		opt_timestamp:1,
 		opt_ttl:1,
 		opt_verbose:1,
@@ -379,6 +389,8 @@ static inline int disable_capability_admin(void)	{ return modify_capability(0); 
 extern void drop_capabilities(void);
 
 char *pr_addr(struct ping_rts *rts, void *sa, socklen_t salen);
+char *pr_raw_addr(struct ping_rts *rts, void *sa, socklen_t salen);
+char *str_interval(int interval);
 
 int is_ours(struct ping_rts *rts, socket_st *sock, uint16_t id);
 extern int pinger(struct ping_rts *rts, ping_func_set_st *fset, socket_st *sock);

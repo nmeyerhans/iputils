@@ -140,8 +140,8 @@ static void usage(void)
 #endif
 	fprintf(stderr, _(
 				"\n"
-		"  -s <source>   source ip address\n"
-		"  <destination> dns name or ip address\n"
+		"  -s <source>   source IP address\n"
+		"  <destination> DNS name or IP address\n"
 		"\nFor more details see arping(8).\n"
 	));
 	exit(2);
@@ -725,8 +725,7 @@ static int event_loop(struct run_state *ctl)
 	uint64_t exp, total_expires = 1;
 
 	unsigned char packet[4096];
-	struct sockaddr_storage from;
-	memset(&from, 0, sizeof(from));
+	struct sockaddr_storage from = {0};
 	socklen_t addr_len = sizeof(from);
 
 	/* signalfd */

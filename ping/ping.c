@@ -63,6 +63,8 @@
 /* FIXME: global_rts will be removed in future */
 struct ping_rts *global_rts;
 
+char *_pr_addr(struct ping_rts *rts, void *sa, socklen_t salen, int resolve_name);
+
 #ifndef ICMP_FILTER
 #define ICMP_FILTER	1
 struct icmp_filter {
@@ -214,6 +216,7 @@ static double ping_strtod(const char *str, const char *err_msg)
 {
 	double num;
 	char *end = NULL;
+	int strtod_errno = 0;
 
 	if (str == NULL || *str == '\0')
 		goto err;
@@ -225,7 +228,10 @@ static double ping_strtod(const char *str, const char *err_msg)
 	 */
 	setlocale(LC_ALL, "C");
 	num = strtod(str, &end);
+	strtod_errno = errno;
 	setlocale(LC_ALL, "");
+	/* Ignore setlocale() errno (e.g. invalid locale in env). */
+	errno = strtod_errno;
 
 	if (errno || str == end || (end && *end)) {
 		error(0, 0, _("option argument contains garbage: %s"), end);
@@ -357,7 +363,7 @@ main(int argc, char **argv)
 		hints.ai_family = AF_INET6;
 
 	/* Parse command line options */
-	while ((ch = getopt(argc, argv, "h?" "4bRT:" "6F:N:" "aABc:CdDe:fi:I:l:Lm:M:nOp:qQ:rs:S:t:UvVw:W:")) != EOF) {
+	while ((ch = getopt(argc, argv, "h?" "4bRT:" "6F:N:" "aABc:CdDe:fHi:I:l:Lm:M:nOp:qQ:rs:S:t:UvVw:W:")) != EOF) {
 		switch(ch) {
 		/* IPv4 specific options */
 		case '4':
@@ -427,12 +433,15 @@ main(int argc, char **argv)
 		case 'D':
 			rts.opt_ptimeofday = 1;
 			break;
+		case 'H':
+			rts.opt_force_lookup = 1;
+			break;
 		case 'i':
 		{
 			double optval;
 
 			optval = ping_strtod(optarg, _("bad timing interval"));
-			if (isgreater(optval, (double)INT_MAX / 1000))
+			if (isless(optval, 0) || isgreater(optval, (double)INT_MAX / 1000))
 				error(2, 0, _("bad timing interval: %s"), optarg);
 			rts.interval = (int)(optval * 1000);
 			rts.opt_interval = 1;
@@ -483,11 +492,14 @@ main(int argc, char **argv)
 				rts.pmtudisc = IP_PMTUDISC_DONT;
 			else if (strcmp(optarg, "want") == 0)
 				rts.pmtudisc = IP_PMTUDISC_WANT;
+			else if (strcmp(optarg, "probe") == 0)
+				rts.pmtudisc = IP_PMTUDISC_PROBE;
 			else
 				error(2, 0, _("invalid -M argument: %s"), optarg);
 			break;
 		case 'n':
 			rts.opt_numeric = 1;
+			rts.opt_force_lookup = 0;
 			break;
 		case 'O':
 			rts.opt_outstanding = 1;
@@ -561,8 +573,6 @@ main(int argc, char **argv)
 	if (!argc)
 		error(1, EDESTADDRREQ, "usage error");
 
-	iputils_srand();
-
 	target = argv[argc - 1];
 
 	rts.outpack = malloc(rts.datalen + 28);
@@ -599,7 +609,8 @@ main(int argc, char **argv)
 		 * since I don't know that, it's better to be safe than sorry. */
 		rts.pmtudisc = rts.pmtudisc == IP_PMTUDISC_DO	? IPV6_PMTUDISC_DO   :
 			       rts.pmtudisc == IP_PMTUDISC_DONT ? IPV6_PMTUDISC_DONT :
-			       rts.pmtudisc == IP_PMTUDISC_WANT ? IPV6_PMTUDISC_WANT : rts.pmtudisc;
+			       rts.pmtudisc == IP_PMTUDISC_WANT ? IPV6_PMTUDISC_WANT :
+			       rts.pmtudisc == IP_PMTUDISC_PROBE? IPV6_PMTUDISC_PROBE: rts.pmtudisc;
 	}
 
 	disable_capability_raw();
@@ -778,8 +789,17 @@ int ping4_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 
 			memcpy(&rts->whereto, result->ai_addr, sizeof rts->whereto);
 			memset(hnamebuf, 0, sizeof hnamebuf);
+
+			/*
+			 * On certain network setup getaddrinfo() can return empty
+			 * ai_canonname. Instead of printing nothing in "PING"
+			 * line use the target.
+			 */
 			if (result->ai_canonname)
 				strncpy(hnamebuf, result->ai_canonname, sizeof hnamebuf - 1);
+			else
+				strncpy(hnamebuf, target, sizeof hnamebuf - 1);
+
 			rts->hostname = hnamebuf;
 
 			if (argc > 1)
@@ -868,12 +888,17 @@ int ping4_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 
 	if (rts->broadcast_pings || IN_MULTICAST(ntohl(rts->whereto.sin_addr.s_addr))) {
 		rts->multicast = 1;
+
 		if (rts->uid) {
-			if (rts->interval < 1000)
-				error(2, 0, _("broadcast ping with too short interval: %d"), rts->interval);
+			if (rts->interval < MIN_MULTICAST_USER_INTERVAL_MS)
+				error(2, 0, _("minimal interval for broadcast ping for user must be >= %d ms, use -i %s (or higher)"),
+					  MIN_MULTICAST_USER_INTERVAL_MS,
+					  str_interval(MIN_MULTICAST_USER_INTERVAL_MS));
+
 			if (rts->pmtudisc >= 0 && rts->pmtudisc != IP_PMTUDISC_DO)
 				error(2, 0, _("broadcast ping does not fragment"));
 		}
+
 		if (rts->pmtudisc < 0)
 			rts->pmtudisc = IP_PMTUDISC_DO;
 	}
@@ -1504,7 +1529,7 @@ in_cksum(const unsigned short *addr, int len, unsigned short csum)
 /*
  * pinger --
  * 	Compose and transmit an ICMP ECHO REQUEST packet.  The IP packet
- * will be added on by the kernel.  The ID field is a random number,
+ * will be added on by the kernel.  The ID field is our UNIX process ID,
  * and the sequence number is an ascending integer.  The first several bytes
  * of the data portion are used to hold a UNIX "timeval" struct in VAX
  * byte-order, to compute the round-trip time.
@@ -1719,17 +1744,37 @@ int ping4_parse_reply(struct ping_rts *rts, struct socket_st *sock,
 /*
  * pr_addr --
  *
- * Return an ascii host address optionally with a hostname.
+ * Return an ascii host address with reverse name resolution.
  */
 char *pr_addr(struct ping_rts *rts, void *sa, socklen_t salen)
 {
+	return _pr_addr(rts, sa, salen, 1);
+}
+
+/*
+ * pr_raw_addr --
+ *
+ * Return an ascii host address.  Reverse name resolution is not performed.
+ */
+
+char *pr_raw_addr(struct ping_rts *rts, void *sa, socklen_t salen)
+{
+	return _pr_addr(rts, sa, salen, 0);
+}
+
+/*
+ * _pr_addr --
+ *
+ * Return an ascii host address optionally with a hostname.
+ */
+char *_pr_addr(struct ping_rts *rts, void *sa, socklen_t salen, int resolve_name)
+{
 	static char buffer[4096] = "";
-	static struct sockaddr_storage last_sa;
+	static struct sockaddr_storage last_sa = {0};
 	static socklen_t last_salen = 0;
 	char name[NI_MAXHOST] = "";
 	char address[NI_MAXHOST] = "";
 
-	memset(&last_sa, 0, sizeof(last_sa));
 	if (salen == last_salen && !memcmp(sa, &last_sa, salen))
 		return buffer;
 
@@ -1738,10 +1783,10 @@ char *pr_addr(struct ping_rts *rts, void *sa, socklen_t salen)
 	rts->in_pr_addr = !setjmp(rts->pr_addr_jmp);
 
 	getnameinfo(sa, salen, address, sizeof address, NULL, 0, getnameinfo_flags | NI_NUMERICHOST);
-	if (!rts->exiting && !rts->opt_numeric)
+	if (!rts->exiting && resolve_name && (rts->opt_force_lookup || !rts->opt_numeric))
 		getnameinfo(sa, salen, name, sizeof name, NULL, 0, getnameinfo_flags);
 
-	if (*name)
+	if (*name && strncmp(name, address, NI_MAXHOST))
 		snprintf(buffer, sizeof buffer, "%s (%s)", name, address);
 	else
 		snprintf(buffer, sizeof buffer, "%s", address);

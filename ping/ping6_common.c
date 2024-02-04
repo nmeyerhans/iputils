@@ -182,6 +182,10 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 			disable_capability_raw();
 		}
 
+		if (rts->tclass &&
+		    setsockopt(probe_fd, IPPROTO_IPV6, IPV6_TCLASS, &rts->tclass, sizeof (rts->tclass)) <0)
+			error(2, errno, "setsockopt(IPV6_TCLASS)");
+
 		if (!IN6_IS_ADDR_LINKLOCAL(&rts->firsthop.sin6_addr) &&
 		    !IN6_IS_ADDR_MC_LINKLOCAL(&rts->firsthop.sin6_addr))
 			rts->firsthop.sin6_family = AF_INET6;
@@ -257,13 +261,17 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 
 	if (IN6_IS_ADDR_MULTICAST(&rts->whereto6.sin6_addr)) {
 		rts->multicast = 1;
+
 		if (rts->uid) {
-			if (rts->interval < 1000)
-				error(2, 0, _("multicast ping with too short interval: %d"),
-					    rts->interval);
+			if (rts->interval < MIN_MULTICAST_USER_INTERVAL_MS)
+				error(2, 0, _("minimal interval for multicast ping for user must be >= %d ms, use -i %s (or higher)"),
+					  MIN_MULTICAST_USER_INTERVAL_MS,
+					  str_interval(MIN_MULTICAST_USER_INTERVAL_MS));
+
 			if (rts->pmtudisc >= 0 && rts->pmtudisc != IPV6_PMTUDISC_DO)
 				error(2, 0, _("multicast ping does not fragment"));
 		}
+
 		if (rts->pmtudisc < 0)
 			rts->pmtudisc = IPV6_PMTUDISC_DO;
 	}
@@ -368,15 +376,6 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 	   )
 		error(2, errno, _("can't receive hop limit"));
 
-	if (rts->opt_tclass) {
-#ifdef IPV6_TCLASS
-		if (setsockopt(sock->fd, IPPROTO_IPV6, IPV6_TCLASS, &rts->tclass, sizeof rts->tclass) == -1)
-			error(2, errno, _("setsockopt(IPV6_TCLASS)"));
-#else
-		error(0, 0, _("traffic class is not supported"));
-#endif
-	}
-
 	if (rts->opt_flowinfo) {
 		char freq_buf[CMSG_ALIGN(sizeof(struct in6_flowlabel_req)) + rts->cmsglen];
 		struct in6_flowlabel_req *freq = (struct in6_flowlabel_req *)freq_buf;
@@ -396,7 +395,7 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
 			error(2, errno, _("can't send flowinfo"));
 	}
 
-	printf(_("PING %s(%s) "), rts->hostname, pr_addr(rts, &rts->whereto6, sizeof rts->whereto6));
+	printf(_("PING %s (%s) "), rts->hostname, pr_raw_addr(rts, &rts->whereto6, sizeof rts->whereto6));
 	if (rts->flowlabel)
 		printf(_(", flow 0x%05x, "), (unsigned)ntohl(rts->flowlabel));
 	if (rts->device || rts->opt_strictsource) {
@@ -437,6 +436,12 @@ int print_icmp(uint8_t type, uint8_t code, uint32_t info)
 			break;
 		case ICMP6_DST_UNREACH_NOPORT:
 			printf(_("Port unreachable"));
+			break;
+		case ICMP6_DST_UNREACH_POLICYFAIL:
+			printf(_("Source address failed ingress/egress policy"));
+			break;
+		case ICMP6_DST_UNREACH_REJECTROUTE:
+			printf(_("Reject route to destination"));
 			break;
 		default:
 			printf(_("Unknown code %d"), code);
@@ -578,7 +583,7 @@ out:
 /*
  * pinger --
  * 	Compose and transmit an ICMP ECHO REQUEST packet.  The IP packet
- * will be added on by the kernel.  The ID field is a random number,
+ * will be added on by the kernel.  The ID field is our UNIX process ID,
  * and the sequence number is an ascending integer.  The first several bytes
  * of the data portion are used to hold a UNIX "timeval" struct in VAX
  * byte-order, to compute the round-trip time.
@@ -597,8 +602,7 @@ int build_echo(struct ping_rts *rts, uint8_t *_icmph,
 	icmph->icmp6_id = rts->ident;
 
 	if (rts->timing)
-		gettimeofday((struct timeval *)&_icmph[8],
-		    (struct timezone *)NULL);
+		gettimeofday((struct timeval *)&_icmph[8], NULL);
 
 	cc = rts->datalen + 8;			/* skips ICMP portion */
 

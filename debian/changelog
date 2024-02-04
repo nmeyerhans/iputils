@@ -1,3 +1,15 @@
+iputils (3:20240117-1) unstable; urgency=medium
+
+  * New upstream version. See /usr/share/doc/iputils-*/changelog.gz for
+    full details.
+  * Move ping to /usr for DEP17. (Closes: #711492, #1059916)
+  * Update debian/watch (Thanks Petr Vorel <pvorel@suse.cz) (Closes: #1059728)
+  * Update debian/copyright to correct Upstream-Contact field
+  * Stop falling back to setuid binaries for raw socket access
+  * debian/rules: Ensure build-dir is removed in clean
+
+ -- Noah Meyerhans <noahm@debian.org>  Sun, 11 Feb 2024 11:16:58 -0800
+
 iputils (3:20221126-1) unstable; urgency=medium
 
   * New upstream version. See /usr/share/doc/iputils-*/changelog.gz for

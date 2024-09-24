@@ -1,8 +1,9 @@
 iputils (3:20240905-1) UNRELEASED; urgency=medium
 
   * New upstream release
+  * Drop unused libgcrypt-dev builddep (Closes: #1071869)
 
- -- Noah Meyerhans <noahm@debian.org>  Tue, 24 Sep 2024 09:59:16 -0400
+ --
 
 iputils (3:20240117-1) unstable; urgency=medium
 

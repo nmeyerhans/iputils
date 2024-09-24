@@ -1,4 +1,4 @@
-iputils (3:20240905-1) UNRELEASED; urgency=medium
+iputils (3:20240905-1) unstable; urgency=medium
 
   * New upstream release
   * Drop unused libgcrypt-dev builddep (Closes: #1071869)
@@ -7,7 +7,7 @@ iputils (3:20240905-1) UNRELEASED; urgency=medium
   * Replace pkg-config with pkgconf in build-deps
   * Set cap_sys_nice in iputils-clockdiff (Closes: #991252)
 
- --
+ -- Noah Meyerhans <noahm@debian.org>  Tue, 24 Sep 2024 12:24:14 -0400
 
 iputils (3:20240117-1) unstable; urgency=medium
 

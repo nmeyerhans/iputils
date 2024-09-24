@@ -2,6 +2,8 @@ iputils (3:20240905-1) UNRELEASED; urgency=medium
 
   * New upstream release
   * Drop unused libgcrypt-dev builddep (Closes: #1071869)
+  * ping: Add Recommends on linux-sysctl-defaults and stop setting additional
+    capabilities (Closes: #1008281)
 
  --
 

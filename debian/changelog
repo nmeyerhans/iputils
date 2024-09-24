@@ -1,3 +1,9 @@
+iputils (3:20240905-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Noah Meyerhans <noahm@debian.org>  Tue, 24 Sep 2024 09:59:16 -0400
+
 iputils (3:20240117-1) unstable; urgency=medium
 
   * New upstream version. See /usr/share/doc/iputils-*/changelog.gz for

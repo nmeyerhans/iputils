@@ -317,11 +317,18 @@ static int finish(struct run_state *ctl)
 		printf("\n");
 		fflush(stdout);
 	}
+
+	/* arping exit code evaluation */
 	if (ctl->dad)
-		return (!!ctl->received);
+		return !!ctl->received;
+
 	if (ctl->unsolicited)
 		return 0;
-	return (!ctl->received);
+
+	if (ctl->timeout && ctl->count > 0 && !ctl->quit_on_reply)
+		return !(ctl->count <= ctl->received);
+
+	return !ctl->received;
 }
 
 static void print_hex(unsigned char *p, int len)
@@ -693,7 +700,7 @@ static void find_broadcast_address(struct run_state *ctl)
 
 static int event_loop(struct run_state *ctl)
 {
-	int exit_loop = 0, rc = 0;
+	int exit_loop = 0;
 	ssize_t s;
 	enum {
 		POLLFD_SIGNAL = 0,
@@ -780,6 +787,11 @@ static int event_loop(struct run_state *ctl)
 		int ret;
 		size_t i;
 
+		if ((ctl->sent == ctl->count) && ctl->unsolicited) {
+			exit_loop = 1;
+			continue;
+		}
+
 		ret = poll(pfds, POLLFD_COUNT, -1);
 		if (ret <= 0) {
 			if (errno == EAGAIN)
@@ -828,7 +840,7 @@ static int event_loop(struct run_state *ctl)
 					      (struct sockaddr *)&from, &addr_len)) < 0) {
 					error(0, errno, "recvfrom");
 					if (errno == ENETDOWN)
-						rc = 2;
+						return 2;
 					continue;
 				}
 				if (recv_pack
@@ -840,20 +852,12 @@ static int event_loop(struct run_state *ctl)
 			}
 		}
 	}
+
 	close(sfd);
 	close(tfd);
 	freeifaddrs(ctl->ifa0);
-	rc |= finish(ctl);
-	if (ctl->unsolicited)
-		/* nothing */;
-	else if (ctl->dad && ctl->quit_on_reply)
-		/* Duplicate address detection mode return value */
-		rc |= !(ctl->brd_sent != ctl->received);
-	else if (ctl->timeout && !(ctl->count > 0))
-		rc |= !(ctl->received > 0);
-	else
-		rc |= (ctl->sent != ctl->received);
-	return rc;
+
+	return finish(ctl);
 }
 
 int main(int argc, char **argv)

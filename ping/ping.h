@@ -107,6 +107,9 @@ typedef uint32_t	bitmap_t;
 # error Please MAX_DUP_CHK and/or BITMAP_SHIFT
 #endif
 
+/* IPv4 packet size / IPv6 payload size */
+#define	MAXPACKET	65535
+
 struct rcvd_table {
 	bitmap_t bitmap[MAX_DUP_CHK / (sizeof(bitmap_t) * 8)];
 };
@@ -152,11 +155,11 @@ struct ping_ni {
 /*ping runtime state */
 struct ping_rts {
 	unsigned int mark;
-	unsigned char *outpack;
+	unsigned char outpack[MAXPACKET];
 
 	struct rcvd_table rcvd_tbl;
 
-	size_t datalen;
+	int datalen;
 	char *hostname;
 	uid_t uid;
 	int ident;			/* process id to identify our packets */
@@ -233,6 +236,7 @@ struct ping_rts {
 	unsigned int
 		opt_adaptive:1,
 		opt_audible:1,
+		opt_connect_sk:1,
 		opt_flood:1,
 		opt_flood_poll:1,
 		opt_flowinfo:1,
@@ -245,6 +249,7 @@ struct ping_rts {
 		opt_outstanding:1,
 		opt_pingfilled:1,
 		opt_ptimeofday:1,
+		opt_rtt_precision:1,
 		opt_quiet:1,
 		opt_rroute:1,
 		opt_so_debug:1,
@@ -253,8 +258,7 @@ struct ping_rts {
 		opt_strictsource:1,
 		opt_timestamp:1,
 		opt_ttl:1,
-		opt_verbose:1,
-		opt_connect_sk:1;
+		opt_verbose:1;
 };
 /* FIXME: global_rts will be removed in future */
 extern struct ping_rts *global_rts;
@@ -289,8 +293,12 @@ static inline void write_stdout(const char *str, size_t len)
 	ssize_t cc;
 	do {
 		cc = write(STDOUT_FILENO, str + o, len - o);
-		o += cc;
-	} while (len > o || cc < 0);
+
+		if (cc < 0)
+			break;
+
+		o += (size_t) cc;
+	} while (len > o);
 }
 
 /*
@@ -395,7 +403,7 @@ char *str_interval(int interval);
 int is_ours(struct ping_rts *rts, socket_st *sock, uint16_t id);
 extern int pinger(struct ping_rts *rts, ping_func_set_st *fset, socket_st *sock);
 extern void sock_setbufs(struct ping_rts *rts, socket_st *, int alloc);
-extern void sock_setmark(unsigned int mark, int fd);
+extern void sock_setmark(struct ping_rts *rts, int fd);
 extern void setup(struct ping_rts *rts, socket_st *);
 extern int main_loop(struct ping_rts *rts, ping_func_set_st *fset, socket_st*,
 		     uint8_t *packet, int packlen);
@@ -408,7 +416,7 @@ extern int gather_statistics(struct ping_rts *rts, uint8_t *icmph, int icmplen,
 			     void (*pr_reply)(uint8_t *ptr, int cc), int multicast,
 			     int wrong_source);
 extern void print_timestamp(struct ping_rts *rts);
-void fill(struct ping_rts *rts, char *patp, unsigned char *packet, size_t packet_size);
+void fill(struct ping_rts *rts, char *patp, unsigned char *packet, unsigned packet_size);
 
 /* IPv6 */
 

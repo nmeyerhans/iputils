@@ -5,6 +5,7 @@ iputils (3:20240905-1) UNRELEASED; urgency=medium
   * ping: Add Recommends on linux-sysctl-defaults and stop setting additional
     capabilities (Closes: #1008281)
   * Replace pkg-config with pkgconf in build-deps
+  * Set cap_sys_nice in iputils-clockdiff (Closes: #991252)
 
  --
 

@@ -1,3 +1,10 @@
+iputils (3:20240905-2) unstable; urgency=medium
+
+  * Add autopkgtests
+  * Add a debian/NEWS entry describing the use of ICMP_PROTO sockets
+
+ -- Noah Meyerhans <noahm@debian.org>  Mon, 21 Apr 2025 07:50:37 -0400
+
 iputils (3:20240905-1) unstable; urgency=medium
 
   * New upstream release
